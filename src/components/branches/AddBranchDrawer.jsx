@@ -14,6 +14,7 @@ const emptyForm = {
   address: "",
   openingDate: "",
   status: "Active",
+  smdsBuGuid: "",
 };
 
 const AddBranchDrawer = ({ open, onClose, branch = null, onSaved }) => {
@@ -40,6 +41,7 @@ const AddBranchDrawer = ({ open, onClose, branch = null, onSaved }) => {
           ? new Date(branch.openingDate).toISOString().slice(0, 10)
           : "",
         status: branch.status || "Active",
+        smdsBuGuid: branch.smdsBuGuid || "",
       });
     } else {
       setForm(emptyForm);
@@ -84,6 +86,7 @@ const AddBranchDrawer = ({ open, onClose, branch = null, onSaved }) => {
       address: form.address.trim(),
       status: form.status,
       openingDate: form.openingDate || undefined,
+      smdsBuGuid: form.smdsBuGuid.trim(),
     };
 
     try {
@@ -193,6 +196,23 @@ const AddBranchDrawer = ({ open, onClose, branch = null, onSaved }) => {
               />
               <p className="text-xs text-slate-500 mt-1">
                 Used for employee IDs (THT-1, THT-2…). Letters only.
+              </p>
+            </div>
+
+            <div className="col-span-2">
+              <label className="block mb-2 text-sm font-medium">
+                SMDS business unit GUID
+              </label>
+              <input
+                name="smdsBuGuid"
+                value={form.smdsBuGuid}
+                onChange={handleChange}
+                className="w-full border rounded-xl px-4 py-3 font-mono text-sm"
+                placeholder="5ae92023-aad3-4932-accc-77dc89680648"
+              />
+              <p className="text-xs text-slate-500 mt-1">
+                From SMDS /bu (Thatta = THT). Required for field first-order
+                attendance sync.
               </p>
             </div>
 

@@ -45,6 +45,11 @@ const emptyForm = {
   password: "",
   confirmPassword: "",
   resetPassword: false,
+  basicSalary: "",
+  bankName: "",
+  bankAccountTitle: "",
+  bankAccountNumber: "",
+  smdsPartyCode: "",
   workSchedule: { ...defaultSchedule, workingDays: [...defaultSchedule.workingDays] },
 };
 
@@ -137,6 +142,14 @@ const AddEmployeeDrawer = ({
           password: "",
           confirmPassword: "",
           resetPassword: false,
+          basicSalary:
+            employee.basicSalary != null && employee.basicSalary !== ""
+              ? String(employee.basicSalary)
+              : "",
+          bankName: employee.bankName || "",
+          bankAccountTitle: employee.bankAccountTitle || "",
+          bankAccountNumber: employee.bankAccountNumber || "",
+          smdsPartyCode: employee.smdsPartyCode || "",
           workSchedule: {
             start: ws.start || defaults.start,
             end: ws.end || defaults.end,
@@ -366,6 +379,11 @@ const AddEmployeeDrawer = ({
       status: form.status,
       image: form.image || "",
       joiningDate: form.joiningDate || undefined,
+      basicSalary: Number(form.basicSalary) || 0,
+      bankName: form.bankName.trim(),
+      bankAccountTitle: form.bankAccountTitle.trim(),
+      bankAccountNumber: form.bankAccountNumber.trim(),
+      smdsPartyCode: form.smdsPartyCode.trim(),
       workSchedule: {
         start: form.workSchedule.start.trim(),
         end: form.workSchedule.end.trim(),
@@ -556,6 +574,77 @@ const AddEmployeeDrawer = ({
                 className="w-full border rounded-xl px-4 py-3"
                 placeholder="XXXXX-XXXXXXX-X"
               />
+            </div>
+
+            <div className="rounded-xl border border-slate-200 p-4 space-y-3 sm:col-span-2">
+              <p className="text-sm font-semibold text-slate-800">
+                Payroll & SMDS
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block mb-2 text-sm font-medium">
+                    Basic salary (monthly PKR)
+                  </label>
+                  <input
+                    name="basicSalary"
+                    value={form.basicSalary}
+                    onChange={handleChange}
+                    className="w-full border rounded-xl px-4 py-3"
+                    placeholder="50000"
+                    inputMode="decimal"
+                  />
+                </div>
+                <div>
+                  <label className="block mb-2 text-sm font-medium">
+                    SMDS party code
+                  </label>
+                  <input
+                    name="smdsPartyCode"
+                    value={form.smdsPartyCode}
+                    onChange={handleChange}
+                    className="w-full border rounded-xl px-4 py-3"
+                    placeholder="8000001"
+                  />
+                  <p className="text-xs text-slate-500 mt-1.5">
+                    Field salesman code from SMDS (unique per branch). Used for
+                    first-order attendance sync.
+                  </p>
+                </div>
+                <div>
+                  <label className="block mb-2 text-sm font-medium">
+                    Bank name
+                  </label>
+                  <input
+                    name="bankName"
+                    value={form.bankName}
+                    onChange={handleChange}
+                    className="w-full border rounded-xl px-4 py-3"
+                    placeholder="HBL"
+                  />
+                </div>
+                <div>
+                  <label className="block mb-2 text-sm font-medium">
+                    Account title
+                  </label>
+                  <input
+                    name="bankAccountTitle"
+                    value={form.bankAccountTitle}
+                    onChange={handleChange}
+                    className="w-full border rounded-xl px-4 py-3"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block mb-2 text-sm font-medium">
+                    Account number
+                  </label>
+                  <input
+                    name="bankAccountNumber"
+                    value={form.bankAccountNumber}
+                    onChange={handleChange}
+                    className="w-full border rounded-xl px-4 py-3"
+                  />
+                </div>
+              </div>
             </div>
 
             <div>
