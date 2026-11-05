@@ -23,6 +23,7 @@ export const updateSettings = asyncHandler(async (req, res) => {
     attendanceRules,
     gpsRules,
     alertSettings,
+    payrollRules,
   } = req.body;
 
   const settings = await ensureSettings(req.companyId);
@@ -56,6 +57,13 @@ export const updateSettings = asyncHandler(async (req, res) => {
     settings.alertSettings = {
       ...(settings.alertSettings.toObject?.() || settings.alertSettings),
       ...alertSettings,
+    };
+  }
+
+  if (payrollRules) {
+    settings.payrollRules = {
+      ...(settings.payrollRules?.toObject?.() || settings.payrollRules || {}),
+      ...payrollRules,
     };
   }
 

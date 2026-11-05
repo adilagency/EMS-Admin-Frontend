@@ -77,6 +77,7 @@ export const getEmployees = asyncHandler(async (req, res) => {
       { employeeId: regex },
       { devicePin: regex },
       { phone: regex },
+      { smdsPartyCode: regex },
     ];
   }
 
@@ -198,7 +199,9 @@ export const createEmployee = asyncHandler(async (req, res) => {
       throw new Error(
         field === "devicePin"
           ? "Device PIN already in use for this company"
-          : "Employee ID already in use for this company"
+          : field === "smdsPartyCode"
+            ? "SMDS party code already mapped on this branch"
+            : "Employee ID already in use for this company"
       );
     }
     throw err;
@@ -325,7 +328,9 @@ export const updateEmployee = asyncHandler(async (req, res) => {
       throw new Error(
         field === "devicePin"
           ? "Device PIN already in use for this company"
-          : "Employee ID already in use for this company"
+          : field === "smdsPartyCode"
+            ? "SMDS party code already mapped on this branch"
+            : "Employee ID already in use for this company"
       );
     }
     throw err;
