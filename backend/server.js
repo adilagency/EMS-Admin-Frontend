@@ -17,7 +17,10 @@ import settingsRoutes from "./routes/settingsRoutes.js";
 import reportRoutes from "./routes/reportRoutes.js";
 import deviceRoutes from "./routes/deviceRoutes.js";
 import fieldRoutes from "./routes/fieldRoutes.js";
+import taClaimRoutes from "./routes/taClaimRoutes.js";
+import smdsRoutes from "./routes/smdsRoutes.js";
 import { startAutoCloseFieldSessionsJob } from "./jobs/autoCloseFieldSessions.js";
+import { startSmdsAttendanceSyncJob } from "./jobs/smdsAttendanceSync.js";
 
 dotenv.config();
 
@@ -51,6 +54,8 @@ app.use("/api/settings", settingsRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/device", deviceRoutes);
 app.use("/api/field", fieldRoutes);
+app.use("/api/ta-claims", taClaimRoutes);
+app.use("/api/smds", smdsRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
@@ -61,6 +66,7 @@ const start = async () => {
   try {
     await connectDB();
     startAutoCloseFieldSessionsJob();
+    startSmdsAttendanceSyncJob();
     app.listen(PORT, () =>
       console.log(`Server running on http://localhost:${PORT}`)
     );
