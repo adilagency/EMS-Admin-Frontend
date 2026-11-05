@@ -25,3 +25,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+smds-token.json
+SMDS-Integration-API-v1*.pdf
+
