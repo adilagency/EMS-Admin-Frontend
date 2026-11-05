@@ -1,0 +1,38 @@
+# Render Blueprint — deploy from repo root or set Root Directory = backend
+# Dashboard: New → Blueprint → this file
+# Or: New → Web Service → root dir backend (simpler for one service)
+
+services:
+  - type: web
+    name: ems-admin-api
+    runtime: node
+    plan: free
+    rootDir: .
+    buildCommand: npm ci --omit=dev
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGO_URI
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: CLIENT_URL
+        sync: false
+      - key: ADMIN_SECRET
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: SMDS_BASE_URL
+        value: https://sds.adilagencies.net/api/integration/v1
+      - key: SMDS_LOGIN_ID
+        sync: false
+      - key: SMDS_SECRET
+        sync: false
