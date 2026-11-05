@@ -12,6 +12,7 @@ import LiveTrackingPage from "./pages/LiveTrackingPage";
 import AlertsPage from "./pages/AlertsPage";
 import ReportsPage from "./pages/ReportsPage";
 import SettingsPage from "./pages/SettingsPage";
+import TaClaimsPage from "./pages/TaClaimsPage";
 
 function App() {
   return (
@@ -27,6 +28,7 @@ function App() {
             <Route path="/employees" element={<EmployeesPage />} />
             <Route path="/branches" element={<BranchesPage />} />
             <Route path="/attendance" element={<AttendancePage />} />
+            <Route path="/ta-claims" element={<TaClaimsPage />} />
             <Route path="/live-tracking" element={<LiveTrackingPage />} />
             <Route path="/alerts" element={<AlertsPage />} />
             <Route path="/reports" element={<ReportsPage />} />

@@ -54,6 +54,7 @@ const AttendanceFilters = ({
         >
           <option value="all">All Methods</option>
           <option value="Biometric">Biometric</option>
+          <option value="SMDS">SMDS (field order)</option>
           <option value="GPS">GPS</option>
           <option value="Manual">Manual</option>
         </select>

@@ -63,6 +63,9 @@ const SettingsPage = () => {
       lowBatteryAlert: true,
       lowBatteryThreshold: 35,
     },
+    payrollRules: {
+      workingDaysInMonth: 26,
+    },
   });
 
   useEffect(() => {
@@ -102,6 +105,10 @@ const SettingsPage = () => {
             alertSettings: {
               ...prev.alertSettings,
               ...settingsRes.data.alertSettings,
+            },
+            payrollRules: {
+              ...prev.payrollRules,
+              ...settingsRes.data.payrollRules,
             },
             workingDays: settingsRes.data.workingDays || prev.workingDays,
           }));
@@ -143,6 +150,7 @@ const SettingsPage = () => {
           attendanceRules: settings.attendanceRules,
           gpsRules: settings.gpsRules,
           alertSettings: settings.alertSettings,
+          payrollRules: settings.payrollRules,
         }),
       ]);
 
@@ -404,6 +412,47 @@ const SettingsPage = () => {
               );
             })}
           </div>
+        </div>
+      </div>
+
+      {/* Payroll */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-11 h-11 rounded-xl bg-emerald-50 flex items-center justify-center">
+            <KeyRound size={20} className="text-emerald-600" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold">Payroll rules</h2>
+            <p className="text-sm text-slate-500">
+              Operator-controlled. Daily rate = basic salary ÷ working days in
+              month. Absent days are unpaid.
+            </p>
+          </div>
+        </div>
+        <div className="max-w-md">
+          <label className="block text-sm font-medium mb-2">
+            Working days in month (divisor)
+          </label>
+          <input
+            type="number"
+            min={1}
+            max={31}
+            value={settings.payrollRules?.workingDaysInMonth ?? 26}
+            onChange={(e) =>
+              setSettings((s) => ({
+                ...s,
+                payrollRules: {
+                  ...s.payrollRules,
+                  workingDaysInMonth: Number(e.target.value) || 26,
+                },
+              }))
+            }
+            className="w-full border rounded-xl px-4 py-3"
+          />
+          <p className="text-xs text-slate-500 mt-1.5">
+            Example: salary 52,000 ÷ 26 = Rs 2,000/day. Change anytime (26, 30,
+            etc.).
+          </p>
         </div>
       </div>
 

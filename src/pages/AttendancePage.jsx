@@ -9,6 +9,7 @@ import AttendanceHistoryDrawer from "../components/attendance/AttendanceHistoryD
 import ManualAttendanceModal from "../components/attendance/ManualAttendanceModal";
 import * as attendanceService from "../services/attendanceService";
 import * as branchService from "../services/branchService";
+import * as smdsService from "../services/smdsService";
 import {
   attendanceFingerprint,
   playAttendanceChime,
@@ -46,6 +47,7 @@ const AttendancePage = () => {
   const [historyRecord, setHistoryRecord] = useState(null);
   const [page, setPage] = useState(1);
   const [manualOpen, setManualOpen] = useState(false);
+  const [smdsSyncing, setSmdsSyncing] = useState(false);
 
   const fingerprintRef = useRef("");
   const readyRef = useRef(false);
@@ -280,8 +282,8 @@ const AttendancePage = () => {
           <h1 className="text-2xl sm:text-3xl font-bold mt-1">Attendance</h1>
 
           <p className="text-slate-500 mt-1 text-sm sm:text-base">
-            Check-in only — first biometric or manual mark of the day counts as
-            attendance.
+            Check-in only — biometric, manual, or SMDS first order of the day
+            counts as attendance.
           </p>
 
           <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
@@ -305,6 +307,34 @@ const AttendancePage = () => {
         </div>
 
         <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+          <button
+            type="button"
+            disabled={smdsSyncing}
+            onClick={async () => {
+              setSmdsSyncing(true);
+              try {
+                const res = await smdsService.syncSmdsAttendance({
+                  date,
+                  ...(branch !== "all" ? { branchId: branch } : {}),
+                });
+                const d = res.data || {};
+                toast.success(
+                  `SMDS sync: ${d.synced || 0} present, ${d.skipped || 0} skipped` +
+                    (d.errors?.length ? `, ${d.errors.length} errors` : "")
+                );
+                fetchAttendance({ silent: false });
+              } catch (err) {
+                toast.error(
+                  err.response?.data?.message || "SMDS sync failed"
+                );
+              } finally {
+                setSmdsSyncing(false);
+              }
+            }}
+            className="border border-indigo-200 bg-indigo-50 text-indigo-900 hover:bg-indigo-100 transition px-5 py-3 rounded-xl font-medium w-full sm:w-auto disabled:opacity-70"
+          >
+            {smdsSyncing ? "Syncing SMDS..." : "Sync SMDS field"}
+          </button>
           <button
             type="button"
             onClick={() => setManualOpen(true)}
