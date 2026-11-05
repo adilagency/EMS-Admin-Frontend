@@ -40,6 +40,11 @@ const settingsSchema = new mongoose.Schema(
       lowBatteryAlert: { type: Boolean, default: true },
       lowBatteryThreshold: { type: Number, default: 35 },
     },
+    /** Operator-configurable payroll knobs */
+    payrollRules: {
+      /** Divisor for daily rate: basicSalary / workingDaysInMonth */
+      workingDaysInMonth: { type: Number, default: 26, min: 1, max: 31 },
+    },
   },
   { timestamps: true }
 );

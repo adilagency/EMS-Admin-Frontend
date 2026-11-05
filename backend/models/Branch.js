@@ -30,6 +30,8 @@ const branchSchema = new mongoose.Schema(
       default: "Active",
     },
     openingDate: { type: Date },
+    /** SMDS business unit GUID for field order sync (e.g. Thatta). */
+    smdsBuGuid: { type: String, trim: true, default: "" },
   },
   { timestamps: true }
 );

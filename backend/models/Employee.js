@@ -116,12 +116,29 @@ const employeeSchema = new mongoose.Schema(
       default: "Active",
     },
     joiningDate: { type: Date },
+    /** Monthly basic salary (PKR). Payroll uses per-day = basic / workingDaysInMonth. */
+    basicSalary: { type: Number, default: 0, min: 0 },
+    bankName: { type: String, trim: true, default: "" },
+    bankAccountTitle: { type: String, trim: true, default: "" },
+    bankAccountNumber: { type: String, trim: true, default: "" },
+    /**
+     * SMDS partyCode for field attendance sync (e.g. 8000001).
+     * Unique per company+branch — same code can exist in another BU.
+     */
+    smdsPartyCode: { type: String, trim: true, default: "" },
   },
   { timestamps: true }
 );
 
 employeeSchema.index({ company: 1, employeeId: 1 }, { unique: true });
 employeeSchema.index({ company: 1, devicePin: 1 }, { unique: true });
+employeeSchema.index(
+  { company: 1, branch: 1, smdsPartyCode: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { smdsPartyCode: { $gt: "" } },
+  }
+);
 
 employeeSchema.pre("save", async function (next) {
   if (!this.isModified("fieldPassword")) return next();

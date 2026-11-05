@@ -24,7 +24,7 @@ const attendanceSchema = new mongoose.Schema(
     hours: { type: String, default: "--" },
     method: {
       type: String,
-      enum: ["Biometric", "GPS", "Manual", "--"],
+      enum: ["Biometric", "GPS", "Manual", "SMDS", "--"],
       default: "--",
     },
     /** Optional note for manual entry (power outage, device down, etc.) */
