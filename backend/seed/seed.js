@@ -9,22 +9,20 @@ import Employee from "../models/Employee.js";
 import Attendance from "../models/Attendance.js";
 import Tracking from "../models/Tracking.js";
 import Alert from "../models/Alert.js";
-import { syncCompanyAlerts } from "../controllers/alertController.js";
+import BranchDevice from "../models/BranchDevice.js";
+import AttendanceLog from "../models/AttendanceLog.js";
+import FieldSession from "../models/FieldSession.js";
+import TaClaim from "../models/TaClaim.js";
 
-import { company, branches, employees, attendance, tracking } from "./data.js";
+import { company } from "./data.js";
 
 dotenv.config();
-
-const today = new Date().toISOString().slice(0, 10);
 
 const run = async () => {
   try {
     await connectDB();
 
-    console.log("Clearing existing collections...");
-    const BranchDevice = (await import("../models/BranchDevice.js")).default;
-    const AttendanceLog = (await import("../models/AttendanceLog.js")).default;
-
+    console.log("Clearing operational collections...");
     await Promise.all([
       Company.deleteMany(),
       Settings.deleteMany(),
@@ -35,65 +33,16 @@ const run = async () => {
       Alert.deleteMany(),
       BranchDevice.deleteMany(),
       AttendanceLog.deleteMany(),
+      FieldSession.deleteMany(),
+      TaClaim.deleteMany(),
     ]);
 
     const createdCompany = await Company.create(company);
-    const companyId = createdCompany._id;
+    await Settings.create({ company: createdCompany._id });
+
     console.log(`Seeded company: ${company.companyName}`);
-
-    await Settings.create({ company: companyId });
-    console.log("Seeded default settings");
-
-    const branchIdMap = {};
-    for (const b of branches) {
-      const { ref, ...doc } = b;
-      const created = await Branch.create({ ...doc, company: companyId });
-      branchIdMap[ref] = created._id;
-    }
-    console.log(`Seeded ${branches.length} branches`);
-
-    const employeeIdMap = {};
-    const employeeBranchMap = {};
-    for (const e of employees) {
-      const { ref, branchRef, ...doc } = e;
-      const created = await Employee.create({
-        ...doc,
-        company: companyId,
-        branch: branchIdMap[branchRef],
-      });
-      employeeIdMap[ref] = created._id;
-      employeeBranchMap[ref] = branchIdMap[branchRef];
-    }
-    console.log(`Seeded ${employees.length} employees`);
-
-    for (const a of attendance) {
-      const { employeeRef, ...doc } = a;
-      await Attendance.create({
-        ...doc,
-        company: companyId,
-        employee: employeeIdMap[employeeRef],
-        branch: employeeBranchMap[employeeRef],
-        date: today,
-      });
-    }
-    console.log(`Seeded ${attendance.length} attendance records`);
-
-    for (const t of tracking) {
-      const { employeeRef, ...doc } = t;
-      await Tracking.create({
-        ...doc,
-        company: companyId,
-        employee: employeeIdMap[employeeRef],
-        lastUpdated: Date.now(),
-      });
-    }
-    console.log(`Seeded ${tracking.length} tracking records`);
-
-    await syncCompanyAlerts(companyId);
-    const alertCount = await Alert.countDocuments({ company: companyId });
-    console.log(`Seeded / synced ${alertCount} alerts`);
-
-    console.log("\nSeed complete. Login credentials:");
+    console.log("No dummy branches/employees (add real Thatta staff in admin).");
+    console.log("\nLogin:");
     console.log(`  Email:    ${company.email}`);
     console.log(`  Password: ${company.password}`);
 
