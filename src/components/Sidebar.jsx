@@ -21,7 +21,7 @@ const menuItems = [
   { name: "Employees", path: "/employees", icon: Users },
   { name: "Branches", path: "/branches", icon: Building2 },
   { name: "Attendance", path: "/attendance", icon: CalendarCheck },
-  { name: "Travel Allowance", path: "/ta-claims", icon: Wallet },
+  { name: "Payroll", path: "/payroll", icon: Wallet },
   { name: "Live Tracking", path: "/live-tracking", icon: MapPinned },
   { name: "Alerts & Notifications", path: "/alerts", icon: Bell },
   { name: "Reports", path: "/reports", icon: FileBarChart },
