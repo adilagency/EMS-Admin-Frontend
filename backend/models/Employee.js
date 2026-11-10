@@ -118,6 +118,11 @@ const employeeSchema = new mongoose.Schema(
     joiningDate: { type: Date },
     /** Monthly basic salary (PKR). Payroll uses per-day = basic / workingDaysInMonth. */
     basicSalary: { type: Number, default: 0, min: 0 },
+    /**
+     * Daily food allowance (DA) rate in PKR — typically for field staff.
+     * Month total = dailyAllowance × payableDays. Operators can raise rate (e.g. 300 → 350).
+     */
+    dailyAllowance: { type: Number, default: 0, min: 0 },
     bankName: { type: String, trim: true, default: "" },
     bankAccountTitle: { type: String, trim: true, default: "" },
     bankAccountNumber: { type: String, trim: true, default: "" },

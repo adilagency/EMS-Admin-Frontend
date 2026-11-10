@@ -46,6 +46,7 @@ const emptyForm = {
   confirmPassword: "",
   resetPassword: false,
   basicSalary: "",
+  dailyAllowance: "",
   bankName: "",
   bankAccountTitle: "",
   bankAccountNumber: "",
@@ -145,6 +146,10 @@ const AddEmployeeDrawer = ({
           basicSalary:
             employee.basicSalary != null && employee.basicSalary !== ""
               ? String(employee.basicSalary)
+              : "",
+          dailyAllowance:
+            employee.dailyAllowance != null && employee.dailyAllowance !== ""
+              ? String(employee.dailyAllowance)
               : "",
           bankName: employee.bankName || "",
           bankAccountTitle: employee.bankAccountTitle || "",
@@ -380,6 +385,7 @@ const AddEmployeeDrawer = ({
       image: form.image || "",
       joiningDate: form.joiningDate || undefined,
       basicSalary: Number(form.basicSalary) || 0,
+      dailyAllowance: Number(form.dailyAllowance) || 0,
       bankName: form.bankName.trim(),
       bankAccountTitle: form.bankAccountTitle.trim(),
       bankAccountNumber: form.bankAccountNumber.trim(),
@@ -593,6 +599,22 @@ const AddEmployeeDrawer = ({
                     placeholder="50000"
                     inputMode="decimal"
                   />
+                </div>
+                <div>
+                  <label className="block mb-2 text-sm font-medium">
+                    Daily allowance DA (PKR / day)
+                  </label>
+                  <input
+                    name="dailyAllowance"
+                    value={form.dailyAllowance}
+                    onChange={handleChange}
+                    className="w-full border rounded-xl px-4 py-3"
+                    placeholder="300"
+                    inputMode="decimal"
+                  />
+                  <p className="text-xs text-slate-500 mt-1.5">
+                    Field food allowance rate. Month total = rate × present days.
+                  </p>
                 </div>
                 <div>
                   <label className="block mb-2 text-sm font-medium">
