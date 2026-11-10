@@ -16,6 +16,9 @@ import BranchDevice from "../models/BranchDevice.js";
 import AttendanceLog from "../models/AttendanceLog.js";
 import FieldSession from "../models/FieldSession.js";
 import TaClaim from "../models/TaClaim.js";
+import Deduction from "../models/Deduction.js";
+import PayrollPeriod from "../models/PayrollPeriod.js";
+import Payslip from "../models/Payslip.js";
 
 dotenv.config();
 
@@ -39,6 +42,9 @@ const run = async () => {
       AttendanceLog.deleteMany({}),
       FieldSession.deleteMany({}),
       TaClaim.deleteMany({}),
+      Deduction.deleteMany({}),
+      Payslip.deleteMany({}),
+      PayrollPeriod.deleteMany({}),
     ]);
 
     const labels = [
@@ -51,6 +57,9 @@ const run = async () => {
       "attendanceLogs",
       "fieldSessions",
       "taClaims",
+      "deductions",
+      "payslips",
+      "payrollPeriods",
     ];
     labels.forEach((name, i) => {
       console.log(`Deleted ${results[i].deletedCount} ${name}`);

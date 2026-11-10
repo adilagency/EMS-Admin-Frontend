@@ -18,6 +18,8 @@ import reportRoutes from "./routes/reportRoutes.js";
 import deviceRoutes from "./routes/deviceRoutes.js";
 import fieldRoutes from "./routes/fieldRoutes.js";
 import taClaimRoutes from "./routes/taClaimRoutes.js";
+import deductionRoutes from "./routes/deductionRoutes.js";
+import payrollRoutes from "./routes/payrollRoutes.js";
 import smdsRoutes from "./routes/smdsRoutes.js";
 import { startAutoCloseFieldSessionsJob } from "./jobs/autoCloseFieldSessions.js";
 import { startSmdsAttendanceSyncJob } from "./jobs/smdsAttendanceSync.js";
@@ -55,6 +57,8 @@ app.use("/api/reports", reportRoutes);
 app.use("/api/device", deviceRoutes);
 app.use("/api/field", fieldRoutes);
 app.use("/api/ta-claims", taClaimRoutes);
+app.use("/api/deductions", deductionRoutes);
+app.use("/api/payroll", payrollRoutes);
 app.use("/api/smds", smdsRoutes);
 
 app.use(notFound);
