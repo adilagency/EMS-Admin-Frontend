@@ -1,3 +1,4 @@
+import { createRequire } from "module";
 import { loadConfig } from "./config.js";
 import * as api from "./api.js";
 import * as mockAdapter from "./device/mockAdapter.js";
@@ -5,6 +6,15 @@ import * as zkAdapter from "./device/zkAdapter.js";
 import { isAfterCheckpoint } from "./device/punchHelpers.js";
 import * as outbox from "./outbox.js";
 import { logger } from "./logger.js";
+
+const require = createRequire(import.meta.url);
+const AGENT_VERSION = (() => {
+  try {
+    return require("../package.json").version || "1.4.0";
+  } catch {
+    return "1.4.0";
+  }
+})();
 
 const state = {
   running: false,
@@ -23,14 +33,51 @@ const state = {
   deviceLastError: "",
   pollTimer: null,
   syncTimer: null,
+  onlineTimer: null,
+  watchdogTimer: null,
   pollBusy: false,
   syncBusy: false,
+  pollStartedAt: 0,
+  recoverCount: 0,
+  lastRecoverAt: null,
+  loopStartedAt: 0,
 };
 
 const BASE_BACKOFF_MS = 2000;
 const MAX_BACKOFF_MS = 60000;
 let backoffMs = BASE_BACKOFF_MS;
 let nextUploadAllowedAt = 0;
+let recovering = false;
+let zkDevice = null;
+
+function stalePullMs(config = loadConfig()) {
+  return Number(config.watchdogStaleMs) > 0
+    ? Number(config.watchdogStaleMs)
+    : 45000;
+}
+
+function pollHangMs(config = loadConfig()) {
+  return Number(config.pollHangMs) > 0 ? Number(config.pollHangMs) : 35000;
+}
+
+function recoverCooldownMs(config = loadConfig()) {
+  return Number(config.recoverCooldownMs) > 0
+    ? Number(config.recoverCooldownMs)
+    : 20000;
+}
+
+function ensureZkDevice(config = loadConfig()) {
+  if (config.deviceMode !== "zk") {
+    zkDevice = null;
+    return null;
+  }
+  zkDevice = zkAdapter.createDevice({
+    deviceIp: config.deviceIp,
+    devicePort: config.devicePort,
+    fetchTimeoutMs: config.fetchTimeoutMs,
+  });
+  return zkDevice;
+}
 
 export const getAgentState = () => {
   const stats = outbox.getOutboxStats();
@@ -38,14 +85,84 @@ export const getAgentState = () => {
     ...state,
     pendingCount: stats.pending,
     outbox: stats,
+    agentVersion: AGENT_VERSION,
     pollTimer: undefined,
     syncTimer: undefined,
+    onlineTimer: undefined,
+    watchdogTimer: undefined,
   };
 };
 
 /**
+ * Drop hung poll state, kill ZK TCP, reconnect.
+ * Used by watchdog + Windows sleep/resume (Gymfinity 1.0.9).
+ */
+export async function recoverDevice(reason) {
+  if (!state.running || recovering) return false;
+
+  const last = state.lastRecoverAt ? Date.parse(state.lastRecoverAt) : 0;
+  if (last && Date.now() - last < recoverCooldownMs()) {
+    return false;
+  }
+
+  recovering = true;
+  state.lastRecoverAt = new Date().toISOString();
+  state.recoverCount += 1;
+  state.lastError = `Auto-recover: ${reason}`;
+  outbox.bumpReconnect();
+  logger.warn("Device auto-recover", {
+    reason,
+    recoverCount: state.recoverCount,
+    lastPullAt: state.lastPullAt,
+    pollBusy: state.pollBusy,
+  });
+
+  try {
+    state.pollBusy = false;
+    state.pollStartedAt = 0;
+
+    const config = loadConfig();
+    if (config.deviceMode === "zk") {
+      try {
+        await zkDevice?.forceReset?.();
+      } catch (err) {
+        logger.warn("forceReset failed", err.message || String(err));
+      }
+      ensureZkDevice(config);
+      const ok = await zkDevice.connect();
+      state.deviceConnected = Boolean(ok);
+      if (ok) {
+        state.deviceLastError = "";
+        state.lastError = "";
+        logger.info("Device recover OK", { ip: config.deviceIp });
+        setImmediate(() => {
+          pullAndEnqueue().catch(() => {});
+        });
+      } else {
+        state.deviceConnected = false;
+        state.deviceLastError = "Device disconnected (after recover)";
+        state.lastError = state.deviceLastError;
+      }
+      return ok;
+    }
+
+    state.deviceConnected = true;
+    state.lastError = "";
+    return true;
+  } finally {
+    recovering = false;
+  }
+}
+
+export async function recoverFromSleep() {
+  if (!state.running) return;
+  logger.info("OS resume — forcing device recover");
+  await recoverDevice("os-resume");
+}
+
+/**
  * Phase A — pull device over LAN → durable outbox.
- * First install: skip historical logs (checkpoint only), like advanced agent.
+ * First install: skip historical logs (checkpoint only).
  * Later: enqueue only punches after checkpoint (with serial wrap awareness).
  */
 export async function pullAndEnqueue() {
@@ -60,10 +177,8 @@ export async function pullAndEnqueue() {
   let mapped = [];
 
   if (config.deviceMode === "zk") {
-    const { ok, logs, error } = await zkAdapter.fetchAttendances({
-      deviceIp: config.deviceIp,
-      devicePort: config.devicePort,
-    });
+    if (!zkDevice) ensureZkDevice(config);
+    const { ok, logs, error } = await zkDevice.fetchAttendances();
     if (!ok) {
       state.deviceConnected = false;
       state.deviceLastError = error || "Device not connected";
@@ -75,7 +190,6 @@ export async function pullAndEnqueue() {
     rawLogs = logs;
     mapped = zkAdapter.mapDeviceLogs(logs);
   } else {
-    // Mock mode: treat as "connected" so UI can be exercised offline
     state.deviceConnected = true;
     state.deviceLastError = "";
     const fromEnv = mockAdapter.punchesFromEnv();
@@ -92,7 +206,6 @@ export async function pullAndEnqueue() {
 
   let st = outbox.loadState();
 
-  // First install: skip existing history, save checkpoint only
   if (!st.initialized) {
     if (rawLogs.length || mapped.length) {
       const sorted = mapped.length
@@ -111,7 +224,12 @@ export async function pullAndEnqueue() {
     }
     state.lastPullAt = new Date().toISOString();
     state.pendingCount = outbox.getPendingCount();
-    return { pulled: mapped.length, added: 0, pending: state.pendingCount, skippedHistory: true };
+    return {
+      pulled: mapped.length,
+      added: 0,
+      pending: state.pendingCount,
+      skippedHistory: true,
+    };
   }
 
   const candidates = mapped.filter((log) =>
@@ -124,11 +242,12 @@ export async function pullAndEnqueue() {
 
   const result = outbox.enqueuePunches(candidates, st);
 
-  if (config.clearDeviceAfterQueue && result.added > 0 && config.deviceMode === "zk") {
-    await zkAdapter.clearAttendanceLog({
-      deviceIp: config.deviceIp,
-      devicePort: config.devicePort,
-    });
+  if (
+    config.clearDeviceAfterQueue &&
+    result.added > 0 &&
+    config.deviceMode === "zk"
+  ) {
+    await zkDevice.clearAttendanceLog();
   }
 
   state.lastPullAt = new Date().toISOString();
@@ -168,7 +287,11 @@ export async function uploadPending() {
   state.online = online;
   if (!online) {
     state.lastError = "Offline — punches kept in local outbox";
-    return { skipped: true, reason: "offline", pending: outbox.getPendingCount() };
+    return {
+      skipped: true,
+      reason: "offline",
+      pending: outbox.getPendingCount(),
+    };
   }
 
   try {
@@ -192,7 +315,7 @@ export async function uploadPending() {
       await api.heartbeat(config.apiUrl, config.deviceSecret, {
         deviceIp: config.deviceIp,
         devicePort: config.devicePort,
-        agentVersion: "1.2.0",
+        agentVersion: AGENT_VERSION,
         pendingCount: 0,
         lastError: "",
       });
@@ -234,12 +357,15 @@ export async function uploadPending() {
     await api.heartbeat(config.apiUrl, config.deviceSecret, {
       deviceIp: config.deviceIp,
       devicePort: config.devicePort,
-      agentVersion: "1.2.0",
+      agentVersion: AGENT_VERSION,
       pendingCount: state.pendingCount,
       lastError: "",
     });
 
-    logger.info("Attendance sent", { uploaded: pending.length, pending: state.pendingCount });
+    logger.info("Attendance sent", {
+      uploaded: pending.length,
+      pending: state.pendingCount,
+    });
 
     return {
       skipped: false,
@@ -270,7 +396,7 @@ export async function uploadPending() {
       await api.heartbeat(config.apiUrl, config.deviceSecret, {
         deviceIp: config.deviceIp,
         devicePort: config.devicePort,
-        agentVersion: "1.2.0",
+        agentVersion: AGENT_VERSION,
         pendingCount: state.pendingCount,
         lastError: err.message,
       });
@@ -333,19 +459,85 @@ export async function runSyncCycle({ catchUp = false } = {}) {
   };
 }
 
+async function checkOnline() {
+  const config = loadConfig();
+  if (!config.apiUrl) {
+    state.online = false;
+    return;
+  }
+  try {
+    state.online = await api.isOnline(config.apiUrl);
+    if (state.online && !String(state.lastError || "").startsWith("Auto-recover")) {
+      // keep last pull/upload errors unless recovering
+    }
+  } catch {
+    state.online = false;
+  }
+}
+
+async function watchdogTick() {
+  if (!state.running || recovering) return;
+  const config = loadConfig();
+  if (config.deviceMode !== "zk") return;
+
+  const now = Date.now();
+
+  if (state.pollBusy && state.pollStartedAt && now - state.pollStartedAt > pollHangMs(config)) {
+    await recoverDevice("hung poll");
+    return;
+  }
+
+  if (!state.lastPullAt) {
+    if (state.loopStartedAt && now - state.loopStartedAt > stalePullMs(config)) {
+      await recoverDevice("no successful pull yet");
+    }
+    return;
+  }
+
+  const age = now - Date.parse(state.lastPullAt);
+  if (Number.isFinite(age) && age > stalePullMs(config)) {
+    await recoverDevice(`stale pull (${Math.round(age / 1000)}s)`);
+  }
+}
+
+export function reloadRuntimeConfig() {
+  const config = loadConfig();
+  if (config.deviceMode === "zk") {
+    ensureZkDevice(config);
+  } else {
+    zkDevice = null;
+  }
+}
+
 export async function startAgentLoop(onUpdate) {
   if (state.running) return;
   state.running = true;
+  state.recoverCount = 0;
+  state.lastRecoverAt = null;
+  state.loopStartedAt = Date.now();
+
+  const config = loadConfig();
+  ensureZkDevice(config);
 
   const notify = (result) => onUpdate?.(getAgentState(), result);
 
   const pollOnce = async () => {
-    if (state.pollBusy || !state.running) return;
+    if (state.pollBusy || !state.running || recovering) return;
     state.pollBusy = true;
+    state.pollStartedAt = Date.now();
     try {
       const pull = await pullAndEnqueue();
       state.pendingCount = pull.pending;
-      notify({ pull, upload: null, punches: pull.pulled, pending: pull.pending, online: state.online });
+      if (!String(state.lastError || "").startsWith("Offline")) {
+        state.lastError = "";
+      }
+      notify({
+        pull,
+        upload: null,
+        punches: pull.pulled,
+        pending: pull.pending,
+        online: state.online,
+      });
     } catch (err) {
       state.deviceConnected = false;
       state.deviceLastError = err.message;
@@ -354,6 +546,7 @@ export async function startAgentLoop(onUpdate) {
       notify(null);
     } finally {
       state.pollBusy = false;
+      state.pollStartedAt = 0;
     }
   };
 
@@ -381,15 +574,16 @@ export async function startAgentLoop(onUpdate) {
     }
   };
 
-  // Startup catch-up
+  await checkOnline();
   await pollOnce();
   await syncOnce();
+  notify(null);
 
   const schedulePoll = () => {
     if (!state.running) return;
-    const config = loadConfig();
+    const cfg = loadConfig();
     const pending = outbox.getPendingCount();
-    const base = Math.max(2, Number(config.pollIntervalSeconds) || 5) * 1000;
+    const base = Math.max(2, Number(cfg.pollIntervalSeconds) || 5) * 1000;
     const ms = pending > 0 ? Math.min(base, 5000) : base;
     state.pollTimer = setTimeout(async () => {
       await pollOnce();
@@ -399,8 +593,8 @@ export async function startAgentLoop(onUpdate) {
 
   const scheduleSync = () => {
     if (!state.running) return;
-    const config = loadConfig();
-    const ms = Math.max(2, Number(config.syncIntervalSeconds) || 3) * 1000;
+    const cfg = loadConfig();
+    const ms = Math.max(2, Number(cfg.syncIntervalSeconds) || 3) * 1000;
     state.syncTimer = setTimeout(async () => {
       await syncOnce();
       scheduleSync();
@@ -410,23 +604,58 @@ export async function startAgentLoop(onUpdate) {
   schedulePoll();
   scheduleSync();
 
+  state.onlineTimer = setInterval(() => {
+    checkOnline()
+      .then(() => notify(null))
+      .catch(() => {});
+  }, 60000);
+
+  const watchdogMs =
+    Number(config.watchdogIntervalMs) > 0
+      ? Number(config.watchdogIntervalMs)
+      : 15000;
+  state.watchdogTimer = setInterval(() => {
+    watchdogTick()
+      .then(() => notify(null))
+      .catch((err) => {
+        logger.warn("Watchdog error", err.message || String(err));
+      });
+  }, watchdogMs);
+
   setInterval(() => {
     logger.info("Heartbeat", {
       pending: outbox.getPendingCount(),
       online: state.online,
+      deviceConnected: state.deviceConnected,
+      recoverCount: state.recoverCount,
       branch: state.branchName,
       lastSuccessfulSync: outbox.loadState().lastSuccessfulSync,
       stats: outbox.loadState().stats,
     });
   }, 300000);
 
-  logger.info("Agent running (poll + sync loops active)");
+  logger.info("Agent running (poll + sync + watchdog)", {
+    version: AGENT_VERSION,
+    watchdogStaleMs: stalePullMs(config),
+    pollHangMs: pollHangMs(config),
+  });
 }
 
 export function stopAgentLoop() {
   state.running = false;
   if (state.pollTimer) clearTimeout(state.pollTimer);
   if (state.syncTimer) clearTimeout(state.syncTimer);
+  if (state.onlineTimer) clearInterval(state.onlineTimer);
+  if (state.watchdogTimer) clearInterval(state.watchdogTimer);
   state.pollTimer = null;
   state.syncTimer = null;
+  state.onlineTimer = null;
+  state.watchdogTimer = null;
+  state.pollBusy = false;
+  state.pollStartedAt = 0;
+  try {
+    zkDevice?.disconnectQuiet?.();
+  } catch {
+    /* ignore */
+  }
 }

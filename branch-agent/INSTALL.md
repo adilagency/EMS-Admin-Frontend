@@ -30,12 +30,13 @@ Copy the **Setup.exe** (or portable) to the branch PC via USB.
 1. Install / run the EXE  
 2. Open **Settings** (tray icon → Settings)  
 3. Set:
-   - API URL: `https://ems-backend-production-9972.up.railway.app/api`
+   - API URL: `https://ems-admin-r5m4.onrender.com/api`
    - Device secret (same as admin branch)
    - Device IP / port `4370`
    - Mode: **zk**
 4. Tick **Start when Windows starts** → **Save**  
 5. Confirm K50 Connected + EMS Online  
+6. Tray shows **Auto-recover** — if the device hangs or PC wakes from sleep, agent reconnects itself  
 
 That alone is enough for many branches (starts at user logon).
 

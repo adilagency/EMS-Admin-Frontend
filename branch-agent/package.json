@@ -1,12 +1,13 @@
 {
   "name": "ems-branch-agent",
-  "version": "1.3.0",
-  "description": "ADIL AGENCIES branch biometric agent — durable offline outbox for ZKTeco K50",
+  "version": "1.4.0",
+  "description": "ADIL AGENCIES branch biometric agent — durable offline outbox + auto-recover watchdog for ZKTeco K50",
   "author": "ADIL AGENCIES",
   "type": "module",
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
+    "start:silent": "cscript //nologo start-silent.vbs",
     "sync": "node src/cli.js",
     "dev:cli": "node src/cli.js --once",
     "pack": "electron-builder --dir",

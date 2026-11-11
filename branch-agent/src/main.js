@@ -1,3 +1,26 @@
+// Silence broken stdout/stderr FIRST — silent / no-console launches
+// otherwise console.log from logger or node-zklib throws EPIPE and kills Electron.
+(function installPipeGuards() {
+  for (const stream of [process.stdout, process.stderr]) {
+    if (stream && typeof stream.on === "function") {
+      stream.on("error", () => {});
+    }
+  }
+  const wrap =
+    (fn) =>
+    (...args) => {
+      try {
+        return fn(...args);
+      } catch {
+        /* EPIPE etc. */
+      }
+    };
+  console.log = wrap(console.log.bind(console));
+  console.info = wrap(console.info.bind(console));
+  console.warn = wrap(console.warn.bind(console));
+  console.error = wrap(console.error.bind(console));
+})();
+
 import {
   app,
   BrowserWindow,
@@ -5,8 +28,10 @@ import {
   Menu,
   nativeImage,
   ipcMain,
+  powerMonitor,
 } from "electron";
 import path from "path";
+import fs from "fs";
 import { fileURLToPath } from "url";
 import { loadConfig, saveConfig, getConfigPath } from "./config.js";
 import {
@@ -14,8 +39,11 @@ import {
   stopAgentLoop,
   getAgentState,
   runSyncCycle,
+  recoverFromSleep,
+  reloadRuntimeConfig,
 } from "./sync.js";
 import { logger } from "./logger.js";
+import { logsDir } from "./paths.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const HEADLESS =
@@ -25,6 +53,26 @@ const HEADLESS =
 
 let tray = null;
 let settingsWin = null;
+
+process.on("uncaughtException", (err) => {
+  if (err && (err.code === "EPIPE" || err.code === "ERR_STREAM_DESTROYED")) {
+    return;
+  }
+  try {
+    const line = `[${new Date().toISOString()}] ${err?.stack || err}\n`;
+    fs.mkdirSync(logsDir(), { recursive: true });
+    fs.appendFileSync(path.join(logsDir(), "crash.log"), line);
+  } catch {
+    /* ignore */
+  }
+  logger.error("uncaughtException", err?.message || String(err));
+});
+
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) {
+  app.quit();
+  process.exit(0);
+}
 
 const applyLoginItem = (enabled) => {
   try {
@@ -47,8 +95,10 @@ const createSettingsWindow = () => {
   }
 
   settingsWin = new BrowserWindow({
-    width: 480,
+    width: 720,
     height: 820,
+    minWidth: 640,
+    minHeight: 640,
     resizable: true,
     show: true,
     webPreferences: {
@@ -94,9 +144,22 @@ const updateTrayMenu = () => {
       enabled: false,
     },
     {
+      label: state.lastPullAt
+        ? `Last pull: ${new Date(state.lastPullAt).toLocaleString()}`
+        : "No device pull yet",
+      enabled: false,
+    },
+    {
       label: state.lastError
-        ? `Error: ${state.lastError.slice(0, 40)}`
+        ? `Error: ${String(state.lastError).slice(0, 40)}`
         : "Status: OK",
+      enabled: false,
+    },
+    {
+      label:
+        state.recoverCount > 0
+          ? `Auto-recover x${state.recoverCount}`
+          : "Auto-recover: idle",
       enabled: false,
     },
     { type: "separator" },
@@ -147,11 +210,14 @@ const createTrayIcon = () => {
     }
   }
 
-  // Visible fallback (blue square) — empty icons hide the tray entry on Windows
   const pngBase64 =
     "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAALElEQVQ4T2NkYGD4z0ABYBzVMKoBBgYGRvL8/5+BkYGBgRGmAKceUjWAYgAAzFkCAf1cQJwAAAAASUVORK5CYII=";
   return nativeImage.createFromDataURL(`data:image/png;base64,${pngBase64}`);
 };
+
+app.on("second-instance", () => {
+  if (!HEADLESS) createSettingsWindow();
+});
 
 app.whenReady().then(() => {
   const config = loadConfig();
@@ -167,7 +233,7 @@ app.whenReady().then(() => {
     try {
       tray.displayBalloon({
         title: "EMS Branch Agent",
-        content: "Running in the system tray. Click the icon for Settings.",
+        content: "Running in the system tray. Auto-sync + auto-recover active.",
       });
     } catch {
       // balloon optional
@@ -178,6 +244,12 @@ app.whenReady().then(() => {
   ipcMain.handle("save-config", (_e, next) => {
     const saved = saveConfig(next);
     applyLoginItem(saved.openAtLogin);
+    try {
+      reloadRuntimeConfig();
+    } catch {
+      /* ignore */
+    }
+    updateTrayMenu();
     return saved;
   });
   ipcMain.handle("get-state", () => getAgentState());
@@ -198,6 +270,22 @@ app.whenReady().then(() => {
     logger.error("agent loop failed", err.message || String(err));
     updateTrayMenu();
   });
+
+  // After sleep/hibernate / unlock, ZK TCP is usually dead even if the tray looks fine
+  const onOsWake = (reason) => {
+    logger.info(`powerMonitor ${reason} → recover device`);
+    recoverFromSleep()
+      .then(() => updateTrayMenu())
+      .catch((err) => {
+        logger.warn("recoverFromSleep failed", err.message || String(err));
+      });
+  };
+  try {
+    powerMonitor.on("resume", () => onOsWake("resume"));
+    powerMonitor.on("unlock-screen", () => onOsWake("unlock-screen"));
+  } catch (err) {
+    logger.warn("powerMonitor not available", err.message || String(err));
+  }
 
   if (HEADLESS) {
     logger.info("Running headless / service mode");

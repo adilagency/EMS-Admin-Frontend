@@ -8,10 +8,10 @@
   </head>
   <body>
     <main>
-      <h1>Branch Agent</h1>
+      <h1>EMS Branch Agent</h1>
       <p class="sub">
-        Paste this branch&apos;s device secret only. Never reuse secrets across
-        branches. Punches are stored locally first, then uploaded when online.
+        Use this branch&apos;s device secret only — never share it across branches.
+        Attendance punches are saved locally first, then uploaded when the server is online.
       </p>
 
       <div id="outboxPanel" class="outbox">
@@ -30,7 +30,7 @@
               <span class="dot" id="serverDot"></span>
               <strong id="onlineStatus">Checking…</strong>
             </div>
-            <p class="status-hint" id="serverHint">Internet upload to Railway</p>
+            <p class="status-hint" id="serverHint">Internet upload to EMS backend</p>
           </div>
         </div>
 
@@ -38,47 +38,83 @@
           <span>Pending upload</span>
           <strong id="pendingCount">0</strong>
         </div>
+        <div class="outbox-row">
+          <span>Auto-recover</span>
+          <strong id="recoverCount">idle</strong>
+        </div>
         <p id="status" class="status"></p>
       </div>
 
       <form id="form">
-        <label>
-          Backend API URL
-          <input id="apiUrl" type="text" placeholder="http://localhost:5000/api" />
-        </label>
+        <div class="form-grid">
+          <label class="span-2">
+            Backend API URL
+            <span class="field-hint">
+              Where attendance is uploaded. Change this if you move the backend
+              (must end with /api).
+            </span>
+            <input
+              id="apiUrl"
+              type="url"
+              placeholder="https://ems-admin-r5m4.onrender.com/api"
+              autocomplete="off"
+            />
+          </label>
 
-        <label>
-          Device secret
-          <input id="deviceSecret" type="password" placeholder="ems_dev_..." />
-        </label>
+          <label class="span-2">
+            Device secret
+            <span class="field-hint">
+              Secret for this branch only. Use Show to reveal the value.
+            </span>
+            <div class="secret-wrap">
+              <input
+                id="deviceSecret"
+                type="password"
+                placeholder="ems_dev_..."
+                autocomplete="off"
+              />
+              <button
+                type="button"
+                id="toggleSecret"
+                class="eye-btn"
+                aria-label="Show device secret"
+                title="Show or hide secret"
+              >
+                Show
+              </button>
+            </div>
+          </label>
 
-        <label>
-          Device IP (K50)
-          <input id="deviceIp" type="text" placeholder="192.168.1.201" />
-        </label>
+          <label>
+            Device IP (K50)
+            <input id="deviceIp" type="text" placeholder="192.168.1.201" />
+          </label>
 
-        <label>
-          Device port
-          <input id="devicePort" type="number" value="4370" />
-        </label>
+          <label>
+            Device port
+            <input id="devicePort" type="number" value="4370" />
+          </label>
 
-        <label>
-          Poll interval (seconds) — device pull
-          <input id="pollIntervalSeconds" type="number" value="5" min="2" />
-        </label>
+          <label>
+            Poll interval (seconds)
+            <span class="field-hint">How often to pull punches from the device</span>
+            <input id="pollIntervalSeconds" type="number" value="5" min="2" />
+          </label>
 
-        <label>
-          Sync interval (seconds) — upload outbox
-          <input id="syncIntervalSeconds" type="number" value="3" min="2" />
-        </label>
+          <label>
+            Sync interval (seconds)
+            <span class="field-hint">How often to upload the local outbox</span>
+            <input id="syncIntervalSeconds" type="number" value="3" min="2" />
+          </label>
 
-        <label>
-          Device mode
-          <select id="deviceMode">
-            <option value="mock">Mock (API test)</option>
-            <option value="zk">ZKTeco LAN pull</option>
-          </select>
-        </label>
+          <label class="span-2">
+            Device mode
+            <select id="deviceMode">
+              <option value="mock">Mock (API test)</option>
+              <option value="zk">ZKTeco LAN pull</option>
+            </select>
+          </label>
+        </div>
 
         <label class="row">
           <input id="openAtLogin" type="checkbox" checked />

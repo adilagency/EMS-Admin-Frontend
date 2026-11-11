@@ -10,19 +10,32 @@ body {
 }
 
 main {
-  padding: 24px;
+  padding: 28px 32px 32px;
+  max-width: 760px;
+  margin: 0 auto;
 }
 
 h1 {
   margin: 0 0 6px;
-  font-size: 22px;
+  font-size: 24px;
 }
 
 .sub {
-  margin: 0 0 20px;
+  margin: 0 0 22px;
   color: #64748b;
   font-size: 13px;
-  line-height: 1.4;
+  line-height: 1.45;
+  max-width: 62ch;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 16px;
+}
+
+.form-grid .span-2 {
+  grid-column: 1 / -1;
 }
 
 label {
@@ -30,6 +43,15 @@ label {
   font-size: 13px;
   font-weight: 600;
   margin-bottom: 14px;
+}
+
+.field-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #64748b;
+  line-height: 1.35;
 }
 
 input,
@@ -41,6 +63,35 @@ select {
   border: 1px solid #e2e8f0;
   border-radius: 10px;
   font-size: 14px;
+}
+
+.secret-wrap {
+  position: relative;
+  margin-top: 6px;
+}
+
+.secret-wrap input {
+  margin-top: 0;
+  padding-right: 72px;
+}
+
+.eye-btn {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 0;
+  background: #f1f5f9;
+  color: #334155;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.eye-btn:hover {
+  background: #e2e8f0;
 }
 
 .row {

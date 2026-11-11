@@ -56,6 +56,12 @@ async function fillStatus() {
     state.pendingCount ?? state.outbox?.pending ?? 0
   );
 
+  const recoverEl = document.getElementById("recoverCount");
+  if (recoverEl) {
+    const n = Number(state.recoverCount) || 0;
+    recoverEl.textContent = n > 0 ? `×${n}` : "Idle";
+  }
+
   const deviceOk = Boolean(state.deviceConnected);
   setIndicator(
     "deviceDot",
@@ -72,6 +78,7 @@ async function fillStatus() {
   );
 
   const serverOk = Boolean(state.online);
+  const apiHint = cfg.apiUrl || "Set Backend API URL below";
   setIndicator(
     "serverDot",
     "onlineStatus",
@@ -80,8 +87,8 @@ async function fillStatus() {
     "Online",
     "Offline",
     "serverHint",
-    "EMS API reachable — uploads OK",
-    "No internet / API down — punches stay in outbox"
+    `Uploading to ${apiHint}`,
+    `Offline — punches stay in outbox (${apiHint})`
   );
 
   const status = document.getElementById("status");
@@ -125,10 +132,25 @@ document.getElementById("form").addEventListener("submit", async (e) => {
     openAtLogin: document.getElementById("openAtLogin").checked,
   };
 
+  if (!next.apiUrl) {
+    document.getElementById("status").textContent =
+      "Backend API URL required (e.g. https://your-host/api)";
+    return;
+  }
+
   await window.emsAgent.saveConfig(next);
   document.getElementById("status").textContent =
-    "Saved. Restart agent or click Sync now.";
+    "Saved. Click Sync now — new backend URL applies immediately.";
   await fillStatus();
+});
+
+document.getElementById("toggleSecret").addEventListener("click", () => {
+  const input = document.getElementById("deviceSecret");
+  const btn = document.getElementById("toggleSecret");
+  const show = input.type === "password";
+  input.type = show ? "text" : "password";
+  btn.textContent = show ? "Hide" : "Show";
+  btn.setAttribute("aria-label", show ? "Hide device secret" : "Show device secret");
 });
 
 document.getElementById("syncBtn").addEventListener("click", async () => {
