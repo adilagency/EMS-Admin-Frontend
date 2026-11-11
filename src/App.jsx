@@ -31,7 +31,7 @@ function App() {
             <Route path="/payroll" element={<PayrollPage />} />
             <Route
               path="/ta-claims"
-              element={<Navigate to="/payroll?tab=ta" replace />}
+              element={<Navigate to="/payroll?tab=employees" replace />}
             />
             <Route path="/live-tracking" element={<LiveTrackingPage />} />
             <Route path="/alerts" element={<AlertsPage />} />

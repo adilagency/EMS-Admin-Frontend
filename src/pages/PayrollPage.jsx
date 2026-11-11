@@ -16,11 +16,16 @@ import * as deductionService from "../services/deductionService";
 import * as payrollService from "../services/payrollService";
 
 const TABS = [
-  { id: "salaries", label: "Salaries & DA" },
-  { id: "ta", label: "Travel Allowance" },
+  { id: "employees", label: "Employees pay" },
   { id: "deductions", label: "Deductions" },
   { id: "run", label: "Run payroll" },
 ];
+
+const normalizeTab = (raw) => {
+  if (raw === "ta" || raw === "salaries") return "employees";
+  if (TABS.some((t) => t.id === raw)) return raw;
+  return "employees";
+};
 
 const today = () => {
   const d = new Date();
@@ -35,14 +40,16 @@ const money = (n) =>
 
 const PayrollPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const tab = searchParams.get("tab") || "salaries";
+  const tab = normalizeTab(searchParams.get("tab"));
 
   const [branches, setBranches] = useState([]);
   const [branchId, setBranchId] = useState("");
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [salaryDrafts, setSalaryDrafts] = useState({});
+  const [taDrafts, setTaDrafts] = useState({});
   const [savingId, setSavingId] = useState("");
+  const [taSavingId, setTaSavingId] = useState("");
 
   const [claims, setClaims] = useState([]);
   const [deductions, setDeductions] = useState([]);
@@ -67,15 +74,36 @@ const PayrollPage = () => {
     setSearchParams(next);
   };
 
+  useEffect(() => {
+    const raw = searchParams.get("tab");
+    if (raw && normalizeTab(raw) !== raw) {
+      const next = new URLSearchParams(searchParams);
+      next.set("tab", normalizeTab(raw));
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
+
   const branchEmployees = useMemo(
     () =>
       employees.filter((e) => {
-        const b =
-          typeof e.branch === "object" ? e.branch?._id : e.branch;
+        const b = typeof e.branch === "object" ? e.branch?._id : e.branch;
         return String(b) === String(branchId);
       }),
     [employees, branchId]
   );
+
+  const claimsByEmployee = useMemo(() => {
+    const map = new Map();
+    for (const c of claims) {
+      const id =
+        typeof c.employee === "object" ? c.employee?._id : c.employee;
+      if (!id) continue;
+      const key = String(id);
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(c);
+    }
+    return map;
+  }, [claims]);
 
   const loadBranches = useCallback(async () => {
     const res = await branchService.getBranches();
@@ -96,16 +124,22 @@ const PayrollPage = () => {
     const list = res.data || [];
     setEmployees(list);
     const drafts = {};
+    const taNext = {};
     list.forEach((e) => {
       drafts[e._id] = {
         basicSalary: e.basicSalary ?? 0,
         dailyAllowance: e.dailyAllowance ?? 0,
-        bankName: e.bankName || "",
-        bankAccountTitle: e.bankAccountTitle || "",
-        bankAccountNumber: e.bankAccountNumber || "",
       };
+      taNext[e._id] = { amount: "", note: "", date: today() };
     });
     setSalaryDrafts(drafts);
+    setTaDrafts((prev) => {
+      const merged = { ...taNext };
+      for (const id of Object.keys(merged)) {
+        if (prev[id]) merged[id] = { ...merged[id], ...prev[id] };
+      }
+      return merged;
+    });
   }, [branchId]);
 
   const loadTa = useCallback(async () => {
@@ -135,7 +169,7 @@ const PayrollPage = () => {
       (p) => p.year === Number(runYear) && p.month === Number(runMonth)
     );
     setPeriod(match || null);
-    if (match) {
+    if (match?._id) {
       const slips = await payrollService.getPayslips(match._id);
       setPayslips(slips.data || []);
     } else {
@@ -144,16 +178,12 @@ const PayrollPage = () => {
   }, [branchId, runYear, runMonth]);
 
   useEffect(() => {
-    (async () => {
-      setLoading(true);
-      try {
-        await loadBranches();
-      } catch (err) {
-        toast.error(err.response?.data?.message || "Failed to load branches");
-      } finally {
-        setLoading(false);
-      }
-    })();
+    setLoading(true);
+    loadBranches()
+      .catch((err) =>
+        toast.error(err.response?.data?.message || "Failed to load branches")
+      )
+      .finally(() => setLoading(false));
   }, [loadBranches]);
 
   useEffect(() => {
@@ -164,12 +194,18 @@ const PayrollPage = () => {
   }, [branchId, loadEmployees]);
 
   useEffect(() => {
-    if (!branchId || (tab !== "ta" && tab !== "deductions")) return;
-    const loader = tab === "ta" ? loadTa : loadDeductions;
-    loader().catch((err) =>
-      toast.error(err.response?.data?.message || "Failed to load entries")
+    if (!branchId || tab !== "employees") return;
+    loadTa().catch((err) =>
+      toast.error(err.response?.data?.message || "Failed to load TA")
     );
-  }, [branchId, tab, loadTa, loadDeductions]);
+  }, [branchId, tab, loadTa]);
+
+  useEffect(() => {
+    if (!branchId || tab !== "deductions") return;
+    loadDeductions().catch((err) =>
+      toast.error(err.response?.data?.message || "Failed to load deductions")
+    );
+  }, [branchId, tab, loadDeductions]);
 
   useEffect(() => {
     if (!branchId || tab !== "run") return;
@@ -177,6 +213,20 @@ const PayrollPage = () => {
       toast.error(err.response?.data?.message || "Failed to load period")
     );
   }, [branchId, tab, loadPeriod]);
+
+  const updateDraft = (empId, patch) => {
+    setSalaryDrafts((prev) => ({
+      ...prev,
+      [empId]: { ...prev[empId], ...patch },
+    }));
+  };
+
+  const updateTaDraft = (empId, patch) => {
+    setTaDrafts((prev) => ({
+      ...prev,
+      [empId]: { ...prev[empId], ...patch },
+    }));
+  };
 
   const saveSalaryRow = async (empId) => {
     const draft = salaryDrafts[empId];
@@ -186,11 +236,8 @@ const PayrollPage = () => {
       await employeeService.updateEmployee(empId, {
         basicSalary: Number(draft.basicSalary) || 0,
         dailyAllowance: Number(draft.dailyAllowance) || 0,
-        bankName: draft.bankName,
-        bankAccountTitle: draft.bankAccountTitle,
-        bankAccountNumber: draft.bankAccountNumber,
       });
-      toast.success("Saved");
+      toast.success("Pay rates saved");
       await loadEmployees();
     } catch (err) {
       toast.error(err.response?.data?.message || "Save failed");
@@ -199,7 +246,31 @@ const PayrollPage = () => {
     }
   };
 
-  const submitEntry = async (e, kind) => {
+  const addTaForEmployee = async (empId) => {
+    const draft = taDrafts[empId] || {};
+    if (draft.amount === "" || draft.amount == null) {
+      toast.error("Enter a TA amount");
+      return;
+    }
+    setTaSavingId(empId);
+    try {
+      await taClaimService.createTaClaim({
+        employee: empId,
+        date: draft.date || today(),
+        amount: Number(draft.amount),
+        note: draft.note || "",
+      });
+      toast.success("TA added");
+      updateTaDraft(empId, { amount: "", note: "" });
+      await loadTa();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "TA save failed");
+    } finally {
+      setTaSavingId("");
+    }
+  };
+
+  const submitDeduction = async (e) => {
     e.preventDefault();
     if (!entryForm.employee || !entryForm.date || entryForm.amount === "") {
       toast.error("Employee, date and amount are required");
@@ -207,18 +278,15 @@ const PayrollPage = () => {
     }
     setEntrySaving(true);
     try {
-      const payload = {
+      await deductionService.createDeduction({
         employee: entryForm.employee,
         date: entryForm.date,
         amount: Number(entryForm.amount),
         note: entryForm.note,
-      };
-      if (kind === "ta") await taClaimService.createTaClaim(payload);
-      else await deductionService.createDeduction(payload);
-      toast.success(kind === "ta" ? "TA saved" : "Deduction saved");
+      });
+      toast.success("Deduction saved");
       setEntryForm({ employee: "", date: today(), amount: "", note: "" });
-      if (kind === "ta") await loadTa();
-      else await loadDeductions();
+      await loadDeductions();
     } catch (err) {
       toast.error(err.response?.data?.message || "Save failed");
     } finally {
@@ -298,7 +366,7 @@ const PayrollPage = () => {
           Payroll
         </h1>
         <p className="text-slate-500 mt-1 text-sm">
-          Select a branch, set salaries &amp; DA, log TA/deductions, then run the
+          Set each employee&apos;s salary, DA, and TA in one place, then run the
           month.
         </p>
       </div>
@@ -344,142 +412,239 @@ const PayrollPage = () => {
             ))}
           </div>
 
-          {tab === "salaries" && (
-            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-              <div className="px-4 py-3 border-b text-sm text-slate-500">
-                Basic salary is monthly. DA is a daily food rate (× present days
-                at payroll). Save per row.
-              </div>
-              {branchEmployees.length === 0 ? (
-                <p className="py-12 text-center text-slate-500">
-                  No active employees in this branch.
+          {tab === "employees" && (
+            <div className="space-y-4">
+              <div className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-wrap gap-3 items-end">
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    TA range from
+                  </label>
+                  <input
+                    type="date"
+                    value={range.from}
+                    onChange={(e) =>
+                      setRange((p) => ({ ...p, from: e.target.value }))
+                    }
+                    className="border rounded-xl px-3 py-2.5"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">To</label>
+                  <input
+                    type="date"
+                    value={range.to}
+                    onChange={(e) =>
+                      setRange((p) => ({ ...p, to: e.target.value }))
+                    }
+                    className="border rounded-xl px-3 py-2.5"
+                  />
+                </div>
+                <p className="text-sm text-slate-500 sm:ml-auto max-w-md">
+                  Basic salary is monthly. DA is a daily food rate. TA is logged
+                  per trip/day against each employee below.
                 </p>
+              </div>
+
+              {branchEmployees.length === 0 ? (
+                <div className="bg-white rounded-2xl border py-12 text-center text-slate-500">
+                  No active employees in this branch.
+                </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-slate-50 text-left text-slate-600">
-                      <tr>
-                        <th className="px-3 py-3">Employee</th>
-                        <th className="px-3 py-3">Basic salary</th>
-                        <th className="px-3 py-3">DA / day</th>
-                        <th className="px-3 py-3">Bank</th>
-                        <th className="px-3 py-3" />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {branchEmployees.map((emp) => {
-                        const d = salaryDrafts[emp._id] || {};
-                        return (
-                          <tr key={emp._id} className="border-t">
-                            <td className="px-3 py-3">
-                              <div className="font-medium">{emp.employeeId}</div>
-                              <div className="text-xs text-slate-500">
-                                {emp.name}
-                              </div>
-                            </td>
-                            <td className="px-3 py-3">
+                <div className="space-y-4">
+                  {branchEmployees.map((emp) => {
+                    const d = salaryDrafts[emp._id] || {};
+                    const ta = taDrafts[emp._id] || {
+                      amount: "",
+                      note: "",
+                      date: today(),
+                    };
+                    const empClaims = claimsByEmployee.get(String(emp._id)) || [];
+                    const taTotal = entryTotal(empClaims);
+
+                    return (
+                      <div
+                        key={emp._id}
+                        className="bg-white rounded-2xl border border-slate-200 overflow-hidden"
+                      >
+                        <div className="px-4 py-3 border-b bg-slate-50 flex flex-wrap items-center justify-between gap-2">
+                          <div>
+                            <div className="font-semibold">{emp.employeeId}</div>
+                            <div className="text-sm text-slate-500">
+                              {emp.name}
+                            </div>
+                          </div>
+                          <div className="text-sm text-slate-600">
+                            Period TA:{" "}
+                            <span className="font-semibold text-slate-900">
+                              {money(taTotal)}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="p-4 grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+                          <div>
+                            <label className="block text-xs font-medium text-slate-500 mb-1">
+                              Basic salary
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              className="w-full border rounded-lg px-3 py-2"
+                              value={d.basicSalary ?? 0}
+                              onChange={(e) =>
+                                updateDraft(emp._id, {
+                                  basicSalary: e.target.value,
+                                })
+                              }
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-500 mb-1">
+                              DA / day
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              className="w-full border rounded-lg px-3 py-2"
+                              value={d.dailyAllowance ?? 0}
+                              onChange={(e) =>
+                                updateDraft(emp._id, {
+                                  dailyAllowance: e.target.value,
+                                })
+                              }
+                            />
+                          </div>
+                          <div>
+                            <button
+                              type="button"
+                              disabled={savingId === emp._id}
+                              onClick={() => saveSalaryRow(emp._id)}
+                              className="w-full sm:w-auto inline-flex items-center justify-center gap-1 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 disabled:opacity-70"
+                            >
+                              <Save size={14} />
+                              {savingId === emp._id ? "..." : "Save rates"}
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="px-4 pb-4 border-t pt-4">
+                          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
+                            Add travel allowance
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 items-end">
+                            <div className="lg:col-span-2">
+                              <label className="block text-xs font-medium text-slate-500 mb-1">
+                                Date
+                              </label>
+                              <input
+                                type="date"
+                                className="w-full border rounded-lg px-3 py-2"
+                                value={ta.date || today()}
+                                onChange={(e) =>
+                                  updateTaDraft(emp._id, {
+                                    date: e.target.value,
+                                  })
+                                }
+                              />
+                            </div>
+                            <div className="lg:col-span-2">
+                              <label className="block text-xs font-medium text-slate-500 mb-1">
+                                Amount
+                              </label>
                               <input
                                 type="number"
                                 min="0"
-                                className="w-28 border rounded-lg px-2 py-1.5"
-                                value={d.basicSalary ?? 0}
+                                className="w-full border rounded-lg px-3 py-2"
+                                placeholder="600"
+                                value={ta.amount}
                                 onChange={(e) =>
-                                  setSalaryDrafts((prev) => ({
-                                    ...prev,
-                                    [emp._id]: {
-                                      ...prev[emp._id],
-                                      basicSalary: e.target.value,
-                                    },
-                                  }))
+                                  updateTaDraft(emp._id, {
+                                    amount: e.target.value,
+                                  })
                                 }
                               />
-                            </td>
-                            <td className="px-3 py-3">
+                            </div>
+                            <div className="lg:col-span-6">
+                              <label className="block text-xs font-medium text-slate-500 mb-1">
+                                Note
+                              </label>
                               <input
-                                type="number"
-                                min="0"
-                                className="w-24 border rounded-lg px-2 py-1.5"
-                                value={d.dailyAllowance ?? 0}
+                                className="w-full border rounded-lg px-3 py-2"
+                                placeholder="Route / reason (optional)"
+                                value={ta.note || ""}
                                 onChange={(e) =>
-                                  setSalaryDrafts((prev) => ({
-                                    ...prev,
-                                    [emp._id]: {
-                                      ...prev[emp._id],
-                                      dailyAllowance: e.target.value,
-                                    },
-                                  }))
+                                  updateTaDraft(emp._id, {
+                                    note: e.target.value,
+                                  })
                                 }
                               />
-                            </td>
-                            <td className="px-3 py-3 space-y-1 min-w-[180px]">
-                              <input
-                                className="w-full border rounded-lg px-2 py-1 text-xs"
-                                placeholder="Bank name"
-                                value={d.bankName || ""}
-                                onChange={(e) =>
-                                  setSalaryDrafts((prev) => ({
-                                    ...prev,
-                                    [emp._id]: {
-                                      ...prev[emp._id],
-                                      bankName: e.target.value,
-                                    },
-                                  }))
-                                }
-                              />
-                              <input
-                                className="w-full border rounded-lg px-2 py-1 text-xs"
-                                placeholder="Account title"
-                                value={d.bankAccountTitle || ""}
-                                onChange={(e) =>
-                                  setSalaryDrafts((prev) => ({
-                                    ...prev,
-                                    [emp._id]: {
-                                      ...prev[emp._id],
-                                      bankAccountTitle: e.target.value,
-                                    },
-                                  }))
-                                }
-                              />
-                              <input
-                                className="w-full border rounded-lg px-2 py-1 text-xs"
-                                placeholder="Account number"
-                                value={d.bankAccountNumber || ""}
-                                onChange={(e) =>
-                                  setSalaryDrafts((prev) => ({
-                                    ...prev,
-                                    [emp._id]: {
-                                      ...prev[emp._id],
-                                      bankAccountNumber: e.target.value,
-                                    },
-                                  }))
-                                }
-                              />
-                            </td>
-                            <td className="px-3 py-3 text-right">
+                            </div>
+                            <div className="lg:col-span-2">
                               <button
                                 type="button"
-                                disabled={savingId === emp._id}
-                                onClick={() => saveSalaryRow(emp._id)}
-                                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs hover:bg-blue-700 disabled:opacity-70"
+                                disabled={taSavingId === emp._id}
+                                onClick={() => addTaForEmployee(emp._id)}
+                                className="w-full inline-flex items-center justify-center gap-1 px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm font-medium hover:bg-slate-50 disabled:opacity-70"
                               >
-                                <Save size={14} />
-                                {savingId === emp._id ? "..." : "Save"}
+                                <Plus size={14} />
+                                {taSavingId === emp._id ? "..." : "Add TA"}
                               </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                            </div>
+                          </div>
+
+                          {empClaims.length > 0 && (
+                            <div className="mt-3 overflow-x-auto rounded-xl border border-slate-100">
+                              <table className="w-full text-xs">
+                                <thead className="bg-slate-50 text-left text-slate-500">
+                                  <tr>
+                                    <th className="px-3 py-2">Date</th>
+                                    <th className="px-3 py-2">Amount</th>
+                                    <th className="px-3 py-2">Note</th>
+                                    <th className="px-3 py-2" />
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {empClaims.map((c) => (
+                                    <tr key={c._id} className="border-t">
+                                      <td className="px-3 py-2 whitespace-nowrap">
+                                        {c.date}
+                                      </td>
+                                      <td className="px-3 py-2 font-semibold">
+                                        {money(c.amount)}
+                                      </td>
+                                      <td className="px-3 py-2 text-slate-600 max-w-xs truncate">
+                                        {c.note || "—"}
+                                      </td>
+                                      <td className="px-3 py-2 text-right">
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            deleteEntry("ta", c._id)
+                                          }
+                                          className="p-1.5 rounded-lg text-red-600 hover:bg-red-50"
+                                        >
+                                          <Trash2 size={14} />
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
           )}
 
-          {(tab === "ta" || tab === "deductions") && (
+          {tab === "deductions" && (
             <div className="space-y-4">
               <form
-                onSubmit={(e) => submitEntry(e, tab === "ta" ? "ta" : "ded")}
+                onSubmit={submitDeduction}
                 className="bg-white rounded-2xl border p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3"
               >
                 <div className="lg:col-span-2">
@@ -534,11 +699,7 @@ const PayrollPage = () => {
                     className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-70"
                   >
                     <Plus size={18} />
-                    {entrySaving
-                      ? "Saving..."
-                      : tab === "ta"
-                        ? "Add TA"
-                        : "Add deduction"}
+                    {entrySaving ? "Saving..." : "Add deduction"}
                   </button>
                 </div>
                 <div className="sm:col-span-2 lg:col-span-5">
@@ -577,18 +738,13 @@ const PayrollPage = () => {
                   />
                 </div>
                 <div className="text-sm font-medium text-slate-600 sm:ml-auto">
-                  Total:{" "}
-                  {money(
-                    entryTotal(tab === "ta" ? claims : deductions)
-                  )}
+                  Total: {money(entryTotal(deductions))}
                 </div>
               </div>
 
               <EntryTable
-                rows={tab === "ta" ? claims : deductions}
-                onDelete={(id) =>
-                  deleteEntry(tab === "ta" ? "ta" : "ded", id)
-                }
+                rows={deductions}
+                onDelete={(id) => deleteEntry("ded", id)}
               />
             </div>
           )}
@@ -600,7 +756,6 @@ const PayrollPage = () => {
                   <label className="block text-sm font-medium mb-1">Year</label>
                   <input
                     type="number"
-                    min="2020"
                     value={runYear}
                     onChange={(e) => setRunYear(e.target.value)}
                     className="border rounded-xl px-3 py-2.5 w-28"
@@ -620,34 +775,31 @@ const PayrollPage = () => {
                     ))}
                   </select>
                 </div>
-                <div className="text-sm text-slate-500">
+                <div className="text-sm text-slate-600 sm:pb-2">
                   Status:{" "}
-                  <span className="font-semibold text-slate-800">
+                  <span className="font-semibold">
                     {period?.status || "Not opened"}
                   </span>
-                  {period?.workingDaysInMonthSnapshot
-                    ? ` · divisor ${period.workingDaysInMonthSnapshot}`
-                    : ""}
                 </div>
                 <div className="flex gap-2 sm:ml-auto">
                   <button
                     type="button"
-                    disabled={runBusy || period?.status === "Approved"}
                     onClick={openAndCalculate}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
+                    disabled={runBusy || period?.status === "Approved"}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-70"
                   >
                     <Calculator size={18} />
                     {runBusy ? "Working..." : "Calculate"}
                   </button>
                   <button
                     type="button"
+                    onClick={approve}
                     disabled={
                       runBusy ||
                       !period ||
                       period.status !== "Calculated"
                     }
-                    onClick={approve}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 disabled:opacity-60"
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-70"
                   >
                     <CheckCircle2 size={18} />
                     Approve
@@ -656,9 +808,12 @@ const PayrollPage = () => {
               </div>
 
               <div className="bg-white rounded-2xl border overflow-hidden">
+                <div className="px-4 py-3 border-b text-sm text-slate-500">
+                  Payslips for selected month
+                </div>
                 {payslips.length === 0 ? (
                   <p className="py-12 text-center text-slate-500">
-                    No payslips yet. Click Calculate.
+                    No payslips yet — click Calculate.
                   </p>
                 ) : (
                   <div className="overflow-x-auto">
@@ -687,11 +842,13 @@ const PayrollPage = () => {
                               </div>
                             </td>
                             <td className="px-3 py-3">{p.payableDays}</td>
-                            <td className="px-3 py-3">{money(p.salaryPart)}</td>
+                            <td className="px-3 py-3">
+                              {money(p.salaryPart)}
+                            </td>
                             <td className="px-3 py-3">{money(p.taTotal)}</td>
                             <td className="px-3 py-3">
                               {money(p.daTotal)}
-                              <div className="text-[10px] text-slate-400">
+                              <div className="text-[11px] text-slate-400">
                                 @{p.dailyAllowanceRate}/day
                               </div>
                             </td>
@@ -706,8 +863,40 @@ const PayrollPage = () => {
                       </tbody>
                       <tfoot>
                         <tr className="border-t bg-slate-50 font-semibold">
-                          <td className="px-3 py-3" colSpan={6}>
+                          <td className="px-3 py-3" colSpan={2}>
                             Branch total
+                          </td>
+                          <td className="px-3 py-3">
+                            {money(
+                              payslips.reduce(
+                                (s, p) => s + (Number(p.salaryPart) || 0),
+                                0
+                              )
+                            )}
+                          </td>
+                          <td className="px-3 py-3">
+                            {money(
+                              payslips.reduce(
+                                (s, p) => s + (Number(p.taTotal) || 0),
+                                0
+                              )
+                            )}
+                          </td>
+                          <td className="px-3 py-3">
+                            {money(
+                              payslips.reduce(
+                                (s, p) => s + (Number(p.daTotal) || 0),
+                                0
+                              )
+                            )}
+                          </td>
+                          <td className="px-3 py-3">
+                            {money(
+                              payslips.reduce(
+                                (s, p) => s + (Number(p.deductionTotal) || 0),
+                                0
+                              )
+                            )}
                           </td>
                           <td className="px-3 py-3">
                             {money(
@@ -764,9 +953,7 @@ const EntryTable = ({ rows, onDelete }) => {
                     {r.employee?.name}
                   </div>
                 </td>
-                <td className="px-4 py-3 font-semibold">
-                  {money(r.amount)}
-                </td>
+                <td className="px-4 py-3 font-semibold">{money(r.amount)}</td>
                 <td className="px-4 py-3 text-slate-600 max-w-xs truncate">
                   {r.note || "—"}
                 </td>
