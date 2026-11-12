@@ -1,5 +1,8 @@
 /**
- * Create Thatta branch + map SMDS salesmen (excludes Cash Counter).
+ * Create Thatta branch + roster from owner sheet.
+ * Field: Sales Officer / Sales Man / Booker → Order Taker + SMDS where known.
+ * Azhar Khan (SDS developer) is NOT an employee.
+ *
  * Usage: node scripts/seedThatta.mjs
  */
 import dotenv from "dotenv";
@@ -13,31 +16,89 @@ dotenv.config();
 
 const THT_BU_GUID = "5ae92023-aad3-4932-accc-77dc89680648";
 
-/** Real SMDS Thatta salesmen (not Cash Counter) */
 const STAFF = [
   {
     employeeId: "THT-1",
     devicePin: "101",
-    name: "ZULFIQAR",
-    smdsPartyCode: "8000001",
-    designation: "Order Taker",
-    role: "Order Taker",
+    name: "SALMAN KHAN",
+    designation: "Branch Manager",
+    role: "Office Staff",
+    department: "Management",
+    bankName: "Bank AL Habib",
+    bankAccountNumber: "PK46ALFH5637005002748333",
+    cnic: "41409-2136361-7",
+    phone: "0331-3223900",
+    smdsPartyCode: "",
   },
   {
     employeeId: "THT-2",
     devicePin: "102",
-    name: "Azhar Khan",
-    smdsPartyCode: "8000003",
-    designation: "Order Taker",
+    name: "ZULFIQAR ALI",
+    designation: "Sales Officer",
     role: "Order Taker",
+    department: "Sales",
+    bankName: "Bank AL Habib",
+    bankAccountNumber: "PK62ALFH5637005003004610",
+    cnic: "41409-7523326-5",
+    phone: "0321-9488931",
+    smdsPartyCode: "8000001",
   },
   {
     employeeId: "THT-3",
     devicePin: "103",
-    name: "INAYATULLAH AHMED",
-    smdsPartyCode: "8000005",
-    designation: "Order Taker",
+    name: "KAMIL FAQEER ZADA",
+    designation: "Delivery",
+    role: "Dispatcher",
+    department: "Delivery",
+    bankName: "Bank AL Habib",
+    bankAccountNumber: "PK96ALFH5637005003004580",
+    cnic: "41409-3269099-1",
+    phone: "0308-7614144",
+    smdsPartyCode: "",
+  },
+  {
+    employeeId: "THT-4",
+    devicePin: "104",
+    name: "MUHAMMAD FAISAL",
+    designation: "Delivery",
+    role: "Dispatcher",
+    department: "Delivery",
+    cnic: "41409-1841252-2",
+    phone: "0316-2992286",
+    smdsPartyCode: "",
+  },
+  {
+    employeeId: "THT-5",
+    devicePin: "105",
+    name: "URS WARIO",
+    designation: "Sweeper",
+    role: "Office Staff",
+    department: "Support",
+    cnic: "41409-8011744-3",
+    phone: "",
+    smdsPartyCode: "",
+  },
+  {
+    employeeId: "THT-6",
+    devicePin: "106",
+    name: "INAYATULLAH",
+    designation: "Booker and Supplier",
     role: "Order Taker",
+    department: "Sales",
+    cnic: "41409-9063343-5",
+    phone: "0346-8969342",
+    smdsPartyCode: "8000005",
+  },
+  {
+    employeeId: "THT-7",
+    devicePin: "107",
+    name: "RIAZ HUSSAIN",
+    designation: "Office Boy",
+    role: "Office Staff",
+    department: "Support",
+    cnic: "41409-5274261-3",
+    phone: "0328-3544090",
+    smdsPartyCode: "",
   },
 ];
 
@@ -63,81 +124,102 @@ const run = async () => {
         cityCode: "THT",
         city: "Thatta",
         address: "B-11 Unit #1 Hashimabad Housing Society Makli, Thatta",
-        manager: "",
-        phone: "",
+        manager: "SALMAN KHAN",
+        phone: "0331-3223900",
         status: "Active",
         smdsBuGuid: THT_BU_GUID,
       });
-      console.log(`Created branch: ${branch.name} (${branch.cityCode})`);
+      console.log(`Created branch: ${branch.name}`);
     } else {
       branch.smdsBuGuid = THT_BU_GUID;
-      branch.name = branch.name || "Thatta Branch";
-      branch.address =
-        branch.address ||
-        "B-11 Unit #1 Hashimabad Housing Society Makli, Thatta";
+      branch.manager = "SALMAN KHAN";
       await branch.save();
-      console.log(`Updated branch: ${branch.name} — SMDS GUID set`);
+      console.log(`Updated branch: ${branch.name}`);
+    }
+
+    // Remove SDS developer if present
+    const azhar = await Employee.find({
+      company: company._id,
+      branch: branch._id,
+      name: /azhar/i,
+    });
+    for (const a of azhar) {
+      await a.deleteOne();
+      console.log("Removed developer (not staff):", a.employeeId, a.name);
     }
 
     for (const s of STAFF) {
-      const existing = await Employee.findOne({
+      let emp = await Employee.findOne({
         company: company._id,
         employeeId: s.employeeId,
       });
 
-      if (existing) {
-        existing.smdsPartyCode = s.smdsPartyCode;
-        existing.branch = branch._id;
-        existing.name = s.name;
-        existing.role = s.role;
-        existing.designation = s.designation;
-        existing.status = "Active";
-        await existing.save();
-        console.log(
-          `Updated ${s.employeeId} → SMDS ${s.smdsPartyCode} (${s.name})`
-        );
-        continue;
+      if (!emp) {
+        emp = await Employee.findOne({
+          company: company._id,
+          branch: branch._id,
+          name: new RegExp(`^${s.name.split(" ")[0]}`, "i"),
+        });
       }
 
-      await Employee.create({
+      const fields = {
         company: company._id,
         branch: branch._id,
         employeeId: s.employeeId,
         devicePin: s.devicePin,
         name: s.name,
-        phone: "",
+        phone: s.phone || "",
+        cnic: s.cnic || "",
         designation: s.designation,
-        department: "Sales",
+        department: s.department || "",
         role: s.role,
         status: "Active",
-        smdsPartyCode: s.smdsPartyCode,
-        basicSalary: 0,
-        fieldPassword: "tht12345",
-        workSchedule: {
-          start: "08:30 AM",
-          end: "05:30 PM",
-          lateThresholdMinutes: 15,
-          halfDayHours: 4,
-          fullDayHours: 8,
-          workingDays: [
-            "Monday",
-            "Tuesday",
-            "Wednesday",
-            "Thursday",
-            "Friday",
-            "Saturday",
-          ],
-        },
-        shiftTiming: "08:30 AM - 05:30 PM",
-      });
-      console.log(
-        `Created ${s.employeeId} → SMDS ${s.smdsPartyCode} (${s.name})`
-      );
+        smdsPartyCode: s.smdsPartyCode || "",
+        bankName: s.bankName || "",
+        bankAccountTitle: s.name,
+        bankAccountNumber: s.bankAccountNumber || "",
+        basicSalary: emp?.basicSalary ?? 0,
+        dailyAllowance: emp?.dailyAllowance ?? 0,
+      };
+
+      if (emp) {
+        Object.assign(emp, fields);
+        if (
+          (s.role === "Order Taker" || s.role === "Dispatcher") &&
+          !emp.hasFieldPassword
+        ) {
+          emp.fieldPassword = "tht12345";
+        }
+        await emp.save();
+        console.log(`Updated ${s.employeeId} ${s.name}`);
+      } else {
+        await Employee.create({
+          ...fields,
+          ...(s.role === "Order Taker" || s.role === "Dispatcher"
+            ? { fieldPassword: "tht12345" }
+            : {}),
+          workSchedule: {
+            start: "08:30 AM",
+            end: "05:30 PM",
+            lateThresholdMinutes: 15,
+            halfDayHours: 4,
+            fullDayHours: 8,
+            workingDays: [
+              "Monday",
+              "Tuesday",
+              "Wednesday",
+              "Thursday",
+              "Friday",
+              "Saturday",
+            ],
+          },
+        });
+        console.log(`Created ${s.employeeId} ${s.name}`);
+      }
     }
 
-    console.log("\nThatta ready. Sync SMDS field on Attendance for today.");
-    await mongoose.connection.close();
-    process.exit(0);
+    console.log("\nThatta roster ready (7 staff). Azhar Khan not included.");
+    await mongoose.disconnect();
   } catch (err) {
     console.error("seedThatta failed:", err);
     process.exit(1);
