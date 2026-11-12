@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Search, Plus, Users, Eye, Pencil, Trash2 } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import AddEmployeeDrawer from "../components/employees/AddEmployeeDrawer";
+import EmployeeViewCard from "../components/employees/EmployeeViewCard";
 import Pagination from "../components/Pagination";
 import * as employeeService from "../services/employeeService";
 import * as branchService from "../services/branchService";
@@ -13,6 +14,7 @@ const EmployeesPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [openDrawer, setOpenDrawer] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState(null);
+  const [viewingEmployee, setViewingEmployee] = useState(null);
   const [search, setSearch] = useState(() => searchParams.get("q") || "");
   const [branchFilter, setBranchFilter] = useState("all");
   const [designationFilter, setDesignationFilter] = useState("all");
@@ -101,8 +103,13 @@ const EmployeesPage = () => {
   };
 
   const openEdit = (employee) => {
+    setViewingEmployee(null);
     setEditingEmployee(employee);
     setOpenDrawer(true);
+  };
+
+  const openView = (employee) => {
+    setViewingEmployee(employee);
   };
 
   const handleDelete = async (employee) => {
@@ -309,7 +316,8 @@ const EmployeesPage = () => {
                       <div className="flex items-center justify-center gap-2">
                         <button
                           type="button"
-                          onClick={() => openEdit(employee)}
+                          title="View"
+                          onClick={() => openView(employee)}
                           className="w-9 h-9 rounded-xl border hover:bg-slate-100 inline-flex items-center justify-center"
                         >
                           <Eye size={16} />
@@ -317,6 +325,7 @@ const EmployeesPage = () => {
 
                         <button
                           type="button"
+                          title="Edit"
                           onClick={() => openEdit(employee)}
                           className="w-9 h-9 rounded-xl border hover:bg-slate-100 inline-flex items-center justify-center"
                         >
@@ -374,6 +383,16 @@ const EmployeesPage = () => {
           />
         </div>
       </div>
+
+      <EmployeeViewCard
+        open={Boolean(viewingEmployee)}
+        employee={viewingEmployee}
+        branchName={
+          viewingEmployee ? getBranchName(viewingEmployee) : ""
+        }
+        onClose={() => setViewingEmployee(null)}
+        onEdit={(employee) => openEdit(employee)}
+      />
 
       <AddEmployeeDrawer
         open={openDrawer}
