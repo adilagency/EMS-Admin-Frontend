@@ -7,6 +7,7 @@ import {
   Save,
   Calculator,
   CheckCircle2,
+  Search,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import * as branchService from "../services/branchService";
@@ -44,6 +45,7 @@ const PayrollPage = () => {
 
   const [branches, setBranches] = useState([]);
   const [branchId, setBranchId] = useState("");
+  const [employeeSearch, setEmployeeSearch] = useState("");
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [salaryDrafts, setSalaryDrafts] = useState({});
@@ -90,6 +92,30 @@ const PayrollPage = () => {
         return String(b) === String(branchId);
       }),
     [employees, branchId]
+  );
+
+  const filteredEmployees = useMemo(() => {
+    const q = employeeSearch.trim().toLowerCase();
+    if (!q) return branchEmployees;
+    return branchEmployees.filter((e) => {
+      const hay = [
+        e.name,
+        e.employeeId,
+        e.designation,
+        e.role,
+        e.department,
+        e.phone,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return hay.includes(q);
+    });
+  }, [branchEmployees, employeeSearch]);
+
+  const selectedBranch = useMemo(
+    () => branches.find((b) => String(b._id) === String(branchId)),
+    [branches, branchId]
   );
 
   const claimsByEmployee = useMemo(() => {
@@ -371,21 +397,49 @@ const PayrollPage = () => {
         </p>
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-col sm:flex-row gap-3 sm:items-end">
-        <div className="flex-1">
-          <label className="block text-sm font-medium mb-1">Branch</label>
-          <select
-            value={branchId}
-            onChange={(e) => setBranchId(e.target.value)}
-            className="w-full border rounded-xl px-3 py-2.5"
-          >
-            <option value="">Select branch</option>
-            {branches.map((b) => (
-              <option key={b._id} value={b._id}>
-                {b.cityCode || b.code} — {b.name}
-              </option>
-            ))}
-          </select>
+      <div className="bg-white rounded-2xl border border-slate-200 p-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm font-medium mb-1">Branch</label>
+            <select
+              value={branchId}
+              onChange={(e) => {
+                setBranchId(e.target.value);
+                setEmployeeSearch("");
+              }}
+              className="w-full border rounded-xl px-3 py-2.5"
+            >
+              <option value="">Select branch</option>
+              {branches.map((b) => (
+                <option key={b._id} value={b._id}>
+                  {b.cityCode || b.code} — {b.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Search employee
+            </label>
+            <div className="relative">
+              <Search
+                size={16}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+              />
+              <input
+                type="search"
+                value={employeeSearch}
+                onChange={(e) => setEmployeeSearch(e.target.value)}
+                disabled={!branchId}
+                placeholder={
+                  branchId
+                    ? "Name, ID, designation…"
+                    : "Select a branch first"
+                }
+                className="w-full border rounded-xl pl-9 pr-3 py-2.5 disabled:bg-slate-50 disabled:text-slate-400"
+              />
+            </div>
+          </div>
         </div>
       </div>
 
@@ -439,19 +493,35 @@ const PayrollPage = () => {
                     className="border rounded-xl px-3 py-2.5"
                   />
                 </div>
-                <p className="text-sm text-slate-500 sm:ml-auto max-w-md">
-                  Basic salary is monthly. DA is a daily food rate. TA is logged
-                  per trip/day against each employee below.
-                </p>
+                <div className="sm:ml-auto text-sm text-slate-500">
+                  {selectedBranch ? (
+                    <span>
+                      {selectedBranch.cityCode || selectedBranch.code} —{" "}
+                      {filteredEmployees.length}
+                      {employeeSearch.trim()
+                        ? ` of ${branchEmployees.length}`
+                        : ""}{" "}
+                      employee
+                      {filteredEmployees.length === 1 ? "" : "s"}
+                    </span>
+                  ) : null}
+                  <p className="mt-1 max-w-md">
+                    Basic salary is monthly. DA is daily. TA is per trip/day.
+                  </p>
+                </div>
               </div>
 
               {branchEmployees.length === 0 ? (
                 <div className="bg-white rounded-2xl border py-12 text-center text-slate-500">
                   No active employees in this branch.
                 </div>
+              ) : filteredEmployees.length === 0 ? (
+                <div className="bg-white rounded-2xl border py-12 text-center text-slate-500">
+                  No employees match “{employeeSearch.trim()}”.
+                </div>
               ) : (
                 <div className="space-y-4">
-                  {branchEmployees.map((emp) => {
+                  {filteredEmployees.map((emp) => {
                     const d = salaryDrafts[emp._id] || {};
                     const ta = taDrafts[emp._id] || {
                       amount: "",
