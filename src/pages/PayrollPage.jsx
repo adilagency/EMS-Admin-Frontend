@@ -96,7 +96,8 @@ const PayrollPage = () => {
 
   const filteredEmployees = useMemo(() => {
     const q = employeeSearch.trim().toLowerCase();
-    if (!q) return branchEmployees;
+    // Don't dump the whole branch roster — only show matches after search
+    if (!q) return [];
     return branchEmployees.filter((e) => {
       const hay = [
         e.name,
@@ -496,17 +497,14 @@ const PayrollPage = () => {
                 <div className="sm:ml-auto text-sm text-slate-500">
                   {selectedBranch ? (
                     <span>
-                      {selectedBranch.cityCode || selectedBranch.code} —{" "}
-                      {filteredEmployees.length}
+                      {selectedBranch.cityCode || selectedBranch.code}
                       {employeeSearch.trim()
-                        ? ` of ${branchEmployees.length}`
-                        : ""}{" "}
-                      employee
-                      {filteredEmployees.length === 1 ? "" : "s"}
+                        ? ` — ${filteredEmployees.length} of ${branchEmployees.length} match`
+                        : ` — ${branchEmployees.length} employees · search to configure`}
                     </span>
                   ) : null}
                   <p className="mt-1 max-w-md">
-                    Basic salary is monthly. DA is daily. TA is per trip/day.
+                    Search an employee above, then set salary, DA, and TA.
                   </p>
                 </div>
               </div>
@@ -514,6 +512,17 @@ const PayrollPage = () => {
               {branchEmployees.length === 0 ? (
                 <div className="bg-white rounded-2xl border py-12 text-center text-slate-500">
                   No active employees in this branch.
+                </div>
+              ) : !employeeSearch.trim() ? (
+                <div className="bg-white rounded-2xl border py-14 text-center text-slate-500">
+                  <Search size={28} className="mx-auto mb-3 text-slate-300" />
+                  <p className="font-medium text-slate-700">
+                    Search to open an employee
+                  </p>
+                  <p className="text-sm mt-1">
+                    Type a name or ID (e.g. Zulfiqar or THT-2) to set pay rates
+                    and TA.
+                  </p>
                 </div>
               ) : filteredEmployees.length === 0 ? (
                 <div className="bg-white rounded-2xl border py-12 text-center text-slate-500">
