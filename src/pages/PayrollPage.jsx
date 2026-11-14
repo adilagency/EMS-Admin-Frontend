@@ -8,19 +8,24 @@ import {
   Calculator,
   CheckCircle2,
   Search,
+  CalendarDays,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import * as branchService from "../services/branchService";
 import * as employeeService from "../services/employeeService";
 import * as taClaimService from "../services/taClaimService";
 import * as deductionService from "../services/deductionService";
+import * as paidOffDayService from "../services/paidOffDayService";
 import * as payrollService from "../services/payrollService";
 
 const TABS = [
   { id: "employees", label: "Employees pay" },
   { id: "deductions", label: "Deductions" },
+  { id: "paid-offs", label: "Paid offs" },
   { id: "run", label: "Run payroll" },
 ];
+
+const PAID_OFF_TYPES = ["Public Holiday", "Strike", "Other"];
 
 const normalizeTab = (raw) => {
   if (raw === "ta" || raw === "salaries") return "employees";
@@ -55,13 +60,21 @@ const PayrollPage = () => {
 
   const [claims, setClaims] = useState([]);
   const [deductions, setDeductions] = useState([]);
+  const [paidOffs, setPaidOffs] = useState([]);
   const [entryForm, setEntryForm] = useState({
     employee: "",
     date: today(),
     amount: "",
     note: "",
   });
+  const [paidOffForm, setPaidOffForm] = useState({
+    date: today(),
+    type: "Public Holiday",
+    scope: "branch",
+    note: "",
+  });
   const [entrySaving, setEntrySaving] = useState(false);
+  const [paidOffSaving, setPaidOffSaving] = useState(false);
   const [range, setRange] = useState({ from: monthStart(), to: today() });
 
   const [runYear, setRunYear] = useState(new Date().getFullYear());
@@ -189,6 +202,16 @@ const PayrollPage = () => {
     setDeductions(res.data || []);
   }, [branchId, range.from, range.to]);
 
+  const loadPaidOffs = useCallback(async () => {
+    if (!branchId) return;
+    const res = await paidOffDayService.getPaidOffDays({
+      branch: branchId,
+      from: range.from,
+      to: range.to,
+    });
+    setPaidOffs(res.data || []);
+  }, [branchId, range.from, range.to]);
+
   const loadPeriod = useCallback(async () => {
     if (!branchId) return;
     const res = await payrollService.getPeriods({ branch: branchId });
@@ -233,6 +256,13 @@ const PayrollPage = () => {
       toast.error(err.response?.data?.message || "Failed to load deductions")
     );
   }, [branchId, tab, loadDeductions]);
+
+  useEffect(() => {
+    if (!branchId || tab !== "paid-offs") return;
+    loadPaidOffs().catch((err) =>
+      toast.error(err.response?.data?.message || "Failed to load paid offs")
+    );
+  }, [branchId, tab, loadPaidOffs]);
 
   useEffect(() => {
     if (!branchId || tab !== "run") return;
@@ -321,6 +351,42 @@ const PayrollPage = () => {
     }
   };
 
+  const submitPaidOff = async (e) => {
+    e.preventDefault();
+    if (!paidOffForm.date) {
+      toast.error("Date is required");
+      return;
+    }
+    setPaidOffSaving(true);
+    try {
+      await paidOffDayService.createPaidOffDay({
+        date: paidOffForm.date,
+        type: paidOffForm.type,
+        note: paidOffForm.note,
+        scope: paidOffForm.scope,
+        branch: paidOffForm.scope === "branch" ? branchId : undefined,
+      });
+      toast.success("Paid-off day saved — salary & DA will count this day");
+      setPaidOffForm((p) => ({ ...p, note: "" }));
+      await loadPaidOffs();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Save failed");
+    } finally {
+      setPaidOffSaving(false);
+    }
+  };
+
+  const deletePaidOff = async (id) => {
+    if (!window.confirm("Remove this paid-off day?")) return;
+    try {
+      await paidOffDayService.deletePaidOffDay(id);
+      toast.success("Removed");
+      await loadPaidOffs();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Delete failed");
+    }
+  };
+
   const deleteEntry = async (kind, id) => {
     if (!window.confirm("Delete this entry?")) return;
     try {
@@ -393,8 +459,7 @@ const PayrollPage = () => {
           Payroll
         </h1>
         <p className="text-slate-500 mt-1 text-sm">
-          Set each employee&apos;s salary, DA, and TA in one place, then run the
-          month.
+          Set pay rates, mark holidays/strikes as paid offs, then run the month.
         </p>
       </div>
 
@@ -720,6 +785,177 @@ const PayrollPage = () => {
             </div>
           )}
 
+          {tab === "paid-offs" && (
+            <div className="space-y-4">
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm text-slate-600 flex gap-3">
+                <CalendarDays
+                  size={18}
+                  className="text-blue-600 shrink-0 mt-0.5"
+                />
+                <p>
+                  Mark a public holiday or strike here. That date counts as a
+                  payable day for every active employee (salary + DA), even with
+                  no punch. Re-run Calculate after adding or removing days.
+                </p>
+              </div>
+
+              <form
+                onSubmit={submitPaidOff}
+                className="bg-white rounded-2xl border p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3"
+              >
+                <div>
+                  <label className="block text-sm font-medium mb-1">Date</label>
+                  <input
+                    type="date"
+                    value={paidOffForm.date}
+                    onChange={(e) =>
+                      setPaidOffForm((p) => ({ ...p, date: e.target.value }))
+                    }
+                    className="w-full border rounded-xl px-3 py-2.5"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Type</label>
+                  <select
+                    value={paidOffForm.type}
+                    onChange={(e) =>
+                      setPaidOffForm((p) => ({ ...p, type: e.target.value }))
+                    }
+                    className="w-full border rounded-xl px-3 py-2.5"
+                  >
+                    {PAID_OFF_TYPES.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Applies to
+                  </label>
+                  <select
+                    value={paidOffForm.scope}
+                    onChange={(e) =>
+                      setPaidOffForm((p) => ({ ...p, scope: e.target.value }))
+                    }
+                    className="w-full border rounded-xl px-3 py-2.5"
+                  >
+                    <option value="branch">
+                      This branch
+                      {selectedBranch
+                        ? ` (${selectedBranch.cityCode || selectedBranch.name})`
+                        : ""}
+                    </option>
+                    <option value="all">All branches</option>
+                  </select>
+                </div>
+                <div className="sm:col-span-2 lg:col-span-2 flex items-end">
+                  <button
+                    type="submit"
+                    disabled={paidOffSaving}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-70"
+                  >
+                    <Plus size={18} />
+                    {paidOffSaving ? "Saving..." : "Mark paid off"}
+                  </button>
+                </div>
+                <div className="sm:col-span-2 lg:col-span-5">
+                  <input
+                    value={paidOffForm.note}
+                    onChange={(e) =>
+                      setPaidOffForm((p) => ({ ...p, note: e.target.value }))
+                    }
+                    className="w-full border rounded-xl px-3 py-2.5"
+                    placeholder="Note (optional) — e.g. Muharram, city strike"
+                  />
+                </div>
+              </form>
+
+              <div className="flex flex-wrap gap-3 items-end">
+                <div>
+                  <label className="block text-sm font-medium mb-1">From</label>
+                  <input
+                    type="date"
+                    value={range.from}
+                    onChange={(e) =>
+                      setRange((p) => ({ ...p, from: e.target.value }))
+                    }
+                    className="border rounded-xl px-3 py-2.5"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">To</label>
+                  <input
+                    type="date"
+                    value={range.to}
+                    onChange={(e) =>
+                      setRange((p) => ({ ...p, to: e.target.value }))
+                    }
+                    className="border rounded-xl px-3 py-2.5"
+                  />
+                </div>
+                <div className="text-sm font-medium text-slate-600 sm:ml-auto">
+                  {paidOffs.length} day{paidOffs.length === 1 ? "" : "s"}
+                </div>
+              </div>
+
+              <div className="bg-white rounded-2xl border overflow-hidden">
+                {paidOffs.length === 0 ? (
+                  <p className="py-12 text-center text-slate-500">
+                    No paid-off days in this range.
+                  </p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-slate-50 text-slate-500 text-left">
+                        <tr>
+                          <th className="px-4 py-3 font-medium">Date</th>
+                          <th className="px-4 py-3 font-medium">Type</th>
+                          <th className="px-4 py-3 font-medium">Scope</th>
+                          <th className="px-4 py-3 font-medium">Note</th>
+                          <th className="px-4 py-3 font-medium w-16" />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {paidOffs.map((row) => (
+                          <tr
+                            key={row._id}
+                            className="border-t border-slate-100"
+                          >
+                            <td className="px-4 py-3 font-medium">
+                              {row.date}
+                            </td>
+                            <td className="px-4 py-3">{row.type}</td>
+                            <td className="px-4 py-3">
+                              {row.branch
+                                ? row.branch.cityCode ||
+                                  row.branch.name ||
+                                  "Branch"
+                                : "All branches"}
+                            </td>
+                            <td className="px-4 py-3 text-slate-500">
+                              {row.note || "—"}
+                            </td>
+                            <td className="px-4 py-3">
+                              <button
+                                type="button"
+                                onClick={() => deletePaidOff(row._id)}
+                                className="p-1.5 rounded-lg text-red-600 hover:bg-red-50"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {tab === "deductions" && (
             <div className="space-y-4">
               <form
@@ -888,7 +1124,7 @@ const PayrollPage = () => {
 
               <div className="bg-white rounded-2xl border overflow-hidden">
                 <div className="px-4 py-3 border-b text-sm text-slate-500">
-                  Payslips for selected month
+                  Payslips for selected month — Present/Late + paid-off days
                 </div>
                 {payslips.length === 0 ? (
                   <p className="py-12 text-center text-slate-500">
