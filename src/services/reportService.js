@@ -14,8 +14,3 @@ export const getBranchReport = async (params = {}) => {
   const { data } = await api.get("/reports/branches", { params });
   return data;
 };
-
-export const getTrackingReport = async (params = {}) => {
-  const { data } = await api.get("/reports/tracking", { params });
-  return data;
-};

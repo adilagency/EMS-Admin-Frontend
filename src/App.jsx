@@ -8,7 +8,6 @@ import DashboardPage from "./pages/DashboardPage";
 import EmployeesPage from "./pages/EmployeesPage";
 import BranchesPage from "./pages/BranchesPage";
 import AttendancePage from "./pages/AttendancePage";
-import LiveTrackingPage from "./pages/LiveTrackingPage";
 import AlertsPage from "./pages/AlertsPage";
 import ReportsPage from "./pages/ReportsPage";
 import SettingsPage from "./pages/SettingsPage";
@@ -33,7 +32,10 @@ function App() {
               path="/ta-claims"
               element={<Navigate to="/payroll?tab=employees" replace />}
             />
-            <Route path="/live-tracking" element={<LiveTrackingPage />} />
+            <Route
+              path="/live-tracking"
+              element={<Navigate to="/dashboard" replace />}
+            />
             <Route path="/alerts" element={<AlertsPage />} />
             <Route path="/reports" element={<ReportsPage />} />
             <Route path="/settings" element={<SettingsPage />} />

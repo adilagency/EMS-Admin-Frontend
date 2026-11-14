@@ -6,7 +6,6 @@ import {
   ShieldAlert,
   KeyRound,
   Save,
-  MapPinned,
   CheckCircle2,
   X,
 } from "lucide-react";
@@ -456,62 +455,6 @@ const SettingsPage = () => {
         </div>
       </div>
 
-      {/* GPS */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-11 h-11 rounded-xl bg-indigo-50 flex items-center justify-center">
-            <MapPinned size={20} className="text-indigo-600" />
-          </div>
-          <div>
-            <h2 className="text-xl font-bold">GPS Rules</h2>
-            <p className="text-sm text-slate-500">Live tracking refresh settings</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          <div>
-            <label className="block text-sm font-medium mb-2">
-              Refresh Interval (seconds)
-            </label>
-            <input
-              type="number"
-              min={5}
-              value={settings.gpsRules.refreshIntervalSeconds}
-              onChange={(e) =>
-                setSettings((s) => ({
-                  ...s,
-                  gpsRules: {
-                    ...s.gpsRules,
-                    refreshIntervalSeconds: Number(e.target.value),
-                  },
-                }))
-              }
-              className="w-full border rounded-xl px-4 py-3"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-2">
-              Offline Timeout (minutes)
-            </label>
-            <input
-              type="number"
-              min={1}
-              value={settings.gpsRules.offlineTimeoutMinutes}
-              onChange={(e) =>
-                setSettings((s) => ({
-                  ...s,
-                  gpsRules: {
-                    ...s.gpsRules,
-                    offlineTimeoutMinutes: Number(e.target.value),
-                  },
-                }))
-              }
-              className="w-full border rounded-xl px-4 py-3"
-            />
-          </div>
-        </div>
-      </div>
-
       {/* Alerts */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
         <div className="flex items-center gap-3 mb-6">
@@ -530,9 +473,6 @@ const SettingsPage = () => {
           {[
             ["absentAlert", "Absent alerts"],
             ["lateAlert", "Late arrival alerts"],
-            ["gpsDisabledAlert", "GPS disabled alerts"],
-            ["offlineAlert", "Offline alerts"],
-            ["lowBatteryAlert", "Low battery alerts"],
           ].map(([key, label]) => (
             <label
               key={key}
@@ -555,28 +495,6 @@ const SettingsPage = () => {
               />
             </label>
           ))}
-        </div>
-
-        <div className="mt-5 max-w-xs">
-          <label className="block text-sm font-medium mb-2">
-            Low Battery Threshold (%)
-          </label>
-          <input
-            type="number"
-            min={5}
-            max={100}
-            value={settings.alertSettings.lowBatteryThreshold}
-            onChange={(e) =>
-              setSettings((s) => ({
-                ...s,
-                alertSettings: {
-                  ...s.alertSettings,
-                  lowBatteryThreshold: Number(e.target.value),
-                },
-              }))
-            }
-            className="w-full border rounded-xl px-4 py-3"
-          />
         </div>
       </div>
 

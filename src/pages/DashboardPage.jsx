@@ -5,10 +5,8 @@ import {
   UserCheck,
   UserX,
   Clock3,
-  Radio,
   TriangleAlert,
   Building2,
-  MapPin,
   Moon,
   Sun,
 } from "lucide-react";
@@ -19,7 +17,6 @@ import { useTheme } from "../context/ThemeContext";
 import * as dashboardService from "../services/dashboardService";
 import * as attendanceService from "../services/attendanceService";
 import * as branchService from "../services/branchService";
-import * as trackingService from "../services/trackingService";
 import * as alertService from "../services/alertService";
 
 const DashboardPage = () => {
@@ -30,7 +27,6 @@ const DashboardPage = () => {
   const [statsData, setStatsData] = useState(null);
   const [attendancePreview, setAttendancePreview] = useState([]);
   const [branches, setBranches] = useState([]);
-  const [liveEmployees, setLiveEmployees] = useState([]);
   const [criticalAlerts, setCriticalAlerts] = useState([]);
   const [error, setError] = useState("");
 
@@ -47,23 +43,18 @@ const DashboardPage = () => {
       try {
         const today = new Date().toISOString().slice(0, 10);
 
-        const [dashRes, attRes, branchRes, trackRes, alertRes] =
-          await Promise.all([
-            dashboardService.getDashboardStats(),
-            attendanceService.getAttendance({ date: today }),
-            branchService.getBranches(),
-            trackingService.getLiveTracking().catch(() => ({ data: [] })),
-            alertService
-              .getAlerts({ sync: "true", isRead: "false" })
-              .catch(() => ({ data: [] })),
-          ]);
+        const [dashRes, attRes, branchRes, alertRes] = await Promise.all([
+          dashboardService.getDashboardStats(),
+          attendanceService.getAttendance({ date: today }),
+          branchService.getBranches(),
+          alertService
+            .getAlerts({ sync: "true", isRead: "false" })
+            .catch(() => ({ data: [] })),
+        ]);
 
         setStatsData(dashRes.data || {});
         setAttendancePreview((attRes.data || []).slice(0, 6));
         setBranches((branchRes.data || []).slice(0, 5));
-        setLiveEmployees(
-          (trackRes.data || []).filter((t) => t.online).slice(0, 5)
-        );
         setCriticalAlerts(
           (alertRes.data || [])
             .filter((a) => a.severity === "critical" || !a.isRead)
@@ -119,16 +110,6 @@ const DashboardPage = () => {
       change: String(statsData?.lateToday ?? 0),
       changeText: "late",
       positive: (statsData?.lateToday ?? 0) === 0,
-    },
-    {
-      title: "Active Field Employees",
-      value: statsData?.activeField ?? 0,
-      icon: Radio,
-      iconBg: "bg-indigo-50",
-      iconColor: "text-indigo-600",
-      change: String(statsData?.activeField ?? 0),
-      changeText: "live now",
-      positive: true,
     },
     {
       title: "Active Alerts",
@@ -208,7 +189,7 @@ const DashboardPage = () => {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5">
             {stats.map((item) => (
               <StatsCard key={item.title} {...item} />
             ))}
@@ -306,119 +287,57 @@ const DashboardPage = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div className="bg-white rounded-xl h-80 p-5 border shadow-sm flex flex-col">
-              <div className="flex items-center justify-between">
-                <h2 className="font-semibold text-lg">Live Employees</h2>
-                <button
-                  type="button"
-                  onClick={() => navigate("/live-tracking")}
-                  className="text-sm text-blue-600 hover:underline"
-                >
-                  Track
-                </button>
-              </div>
-
-              <div className="mt-4 flex-1 overflow-y-auto space-y-3">
-                {liveEmployees.length === 0 ? (
-                  <p className="text-slate-500 text-sm py-10 text-center">
-                    No field employees online.
-                  </p>
-                ) : (
-                  liveEmployees.map((track) => (
-                    <div
-                      key={track._id}
-                      className="flex items-center justify-between border-b border-slate-100 pb-3"
-                    >
-                      <div>
-                        <p className="font-medium text-sm">
-                          {track.employee?.name || "Unknown"}
-                        </p>
-                        <p className="text-xs text-slate-500 flex items-center gap-1">
-                          <MapPin size={12} />
-                          {track.location || "—"}
-                        </p>
-                      </div>
-                      <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
-                        {track.status}
-                      </span>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-
-            <div className="bg-white rounded-xl h-80 p-5 border shadow-sm flex flex-col">
-              <div className="flex items-center justify-between">
-                <h2 className="font-semibold text-lg">Critical Alerts</h2>
-                <button
-                  type="button"
-                  onClick={() => navigate("/alerts")}
-                  className="text-sm text-blue-600 hover:underline"
-                >
-                  View all
-                </button>
-              </div>
-
-              <div className="mt-4 flex-1 overflow-y-auto space-y-3">
-                {criticalAlerts.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center text-center">
-                    <div className="w-14 h-14 rounded-2xl bg-green-50 flex items-center justify-center mb-3">
-                      <TriangleAlert size={28} className="text-green-600" />
-                    </div>
-                    <p className="font-semibold text-slate-800">No active alerts</p>
-                    <p className="text-sm text-slate-500 mt-1">
-                      Attendance and tracking look clear.
-                    </p>
-                  </div>
-                ) : (
-                  criticalAlerts.map((alert) => (
-                    <button
-                      type="button"
-                      key={alert._id}
-                      onClick={() => navigate("/alerts")}
-                      className="w-full text-left flex items-start justify-between border-b border-slate-100 pb-3 hover:bg-slate-50 rounded-lg px-1"
-                    >
-                      <div>
-                        <p className="font-medium text-sm">{alert.title}</p>
-                        <p className="text-xs text-slate-500 mt-0.5 line-clamp-1">
-                          {alert.message}
-                        </p>
-                      </div>
-                      <span
-                        className={`ml-2 shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                          alert.severity === "critical"
-                            ? "bg-red-100 text-red-700"
-                            : alert.severity === "warning"
-                              ? "bg-orange-100 text-orange-700"
-                              : "bg-blue-100 text-blue-700"
-                        }`}
-                      >
-                        {alert.severity}
-                      </span>
-                    </button>
-                  ))
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl h-80 p-5 border shadow-sm flex flex-col items-center justify-center text-center">
-            <h2 className="font-semibold text-lg self-start">Live Map</h2>
-            <div className="flex-1 flex flex-col items-center justify-center">
-              <div className="w-14 h-14 rounded-2xl bg-blue-50 flex items-center justify-center mb-4">
-                <MapPin size={28} className="text-blue-600" />
-              </div>
-              <p className="text-slate-600">
-                Open Live Tracking for the full interactive map.
-              </p>
+          <div className="bg-white rounded-xl h-80 p-5 border shadow-sm flex flex-col">
+            <div className="flex items-center justify-between">
+              <h2 className="font-semibold text-lg">Critical Alerts</h2>
               <button
                 type="button"
-                onClick={() => navigate("/live-tracking")}
-                className="mt-4 px-5 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-medium hover:bg-blue-700"
+                onClick={() => navigate("/alerts")}
+                className="text-sm text-blue-600 hover:underline"
               >
-                Go to Live Tracking
+                View all
               </button>
+            </div>
+
+            <div className="mt-4 flex-1 overflow-y-auto space-y-3">
+              {criticalAlerts.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-center">
+                  <div className="w-14 h-14 rounded-2xl bg-green-50 flex items-center justify-center mb-3">
+                    <TriangleAlert size={28} className="text-green-600" />
+                  </div>
+                  <p className="font-semibold text-slate-800">No active alerts</p>
+                  <p className="text-sm text-slate-500 mt-1">
+                    Attendance looks clear.
+                  </p>
+                </div>
+              ) : (
+                criticalAlerts.map((alert) => (
+                  <button
+                    type="button"
+                    key={alert._id}
+                    onClick={() => navigate("/alerts")}
+                    className="w-full text-left flex items-start justify-between border-b border-slate-100 pb-3 hover:bg-slate-50 rounded-lg px-1"
+                  >
+                    <div>
+                      <p className="font-medium text-sm">{alert.title}</p>
+                      <p className="text-xs text-slate-500 mt-0.5 line-clamp-1">
+                        {alert.message}
+                      </p>
+                    </div>
+                    <span
+                      className={`ml-2 shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                        alert.severity === "critical"
+                          ? "bg-red-100 text-red-700"
+                          : alert.severity === "warning"
+                            ? "bg-orange-100 text-orange-700"
+                            : "bg-blue-100 text-blue-700"
+                      }`}
+                    >
+                      {alert.severity}
+                    </span>
+                  </button>
+                ))
+              )}
             </div>
           </div>
         </>

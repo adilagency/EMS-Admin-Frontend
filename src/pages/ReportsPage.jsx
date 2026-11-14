@@ -5,7 +5,6 @@ import {
   CalendarDays,
   Users,
   Building2,
-  MapPinned,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import * as reportService from "../services/reportService";
@@ -22,7 +21,6 @@ const reportTypes = [
   { id: "summary", label: "Summary", icon: FileBarChart },
   { id: "attendance", label: "Attendance", icon: CalendarDays },
   { id: "branches", label: "Branches", icon: Building2 },
-  { id: "tracking", label: "Field Tracking", icon: MapPinned },
 ];
 
 const downloadCsv = (filename, headers, rows) => {
@@ -85,11 +83,6 @@ const ReportsPage = () => {
         const res = await reportService.getBranchReport({ from, to });
         setRows(res.data || []);
         setReportSummary(null);
-        setSummary(null);
-      } else {
-        const res = await reportService.getTrackingReport({ branch });
-        setRows(res.data || []);
-        setReportSummary(res.summary || null);
         setSummary(null);
       }
     } catch (err) {
@@ -158,21 +151,6 @@ const ReportsPage = () => {
           r.totalRecords,
         ])
       );
-    } else {
-      downloadCsv(
-        `tracking-${today()}.csv`,
-        ["Employee", "Branch", "Status", "Online", "Battery", "Speed", "Distance today", "Location"],
-        rows.map((r) => [
-          r.employee?.name,
-          r.employee?.branch?.name,
-          r.status,
-          r.online ? "Yes" : "No",
-          r.battery,
-          r.speed,
-          r.todayDistanceLabel || "0 km",
-          r.location,
-        ])
-      );
     }
 
     toast.success("CSV exported");
@@ -187,7 +165,7 @@ const ReportsPage = () => {
           </p>
           <h1 className="text-2xl sm:text-3xl font-bold mt-1">Reports</h1>
           <p className="text-slate-500 mt-1 text-sm sm:text-base">
-            Generate attendance, branch and field tracking reports.
+            Generate attendance and branch reports.
           </p>
         </div>
 
@@ -231,8 +209,7 @@ const ReportsPage = () => {
               type="date"
               value={from}
               onChange={(e) => setFrom(e.target.value)}
-              disabled={reportType === "tracking"}
-              className="w-full rounded-xl border border-slate-200 px-4 py-3 disabled:bg-slate-50"
+              className="w-full rounded-xl border border-slate-200 px-4 py-3"
             />
           </div>
           <div>
@@ -241,8 +218,7 @@ const ReportsPage = () => {
               type="date"
               value={to}
               onChange={(e) => setTo(e.target.value)}
-              disabled={reportType === "tracking"}
-              className="w-full rounded-xl border border-slate-200 px-4 py-3 disabled:bg-slate-50"
+              className="w-full rounded-xl border border-slate-200 px-4 py-3"
             />
           </div>
           <div>
@@ -295,8 +271,6 @@ const ReportsPage = () => {
             ["Absent", summary.absent, CalendarDays],
             ["Late", summary.late, CalendarDays],
             ["Attendance Rows", summary.attendanceRecords, FileBarChart],
-            ["Field Online", summary.fieldOnline, MapPinned],
-            ["Field Offline", summary.fieldOffline, MapPinned],
           ].map(([label, value, Icon]) => (
             <div
               key={label}
@@ -366,17 +340,6 @@ const ReportsPage = () => {
                     <th className="px-5 py-3">Total</th>
                   </tr>
                 )}
-                {reportType === "tracking" && (
-                  <tr className="text-left">
-                    <th className="px-5 py-3">Employee</th>
-                    <th className="px-5 py-3">Branch</th>
-                    <th className="px-5 py-3">Status</th>
-                    <th className="px-5 py-3">Online</th>
-                    <th className="px-5 py-3">Battery</th>
-                    <th className="px-5 py-3">Distance</th>
-                    <th className="px-5 py-3">Location</th>
-                  </tr>
-                )}
               </thead>
               <tbody>
                 {reportType === "attendance" &&
@@ -399,24 +362,6 @@ const ReportsPage = () => {
                       <td className="px-5 py-3">{r.absent}</td>
                       <td className="px-5 py-3">{r.late}</td>
                       <td className="px-5 py-3">{r.totalRecords}</td>
-                    </tr>
-                  ))}
-                {reportType === "tracking" &&
-                  rows.map((r) => (
-                    <tr key={r._id} className="border-t">
-                      <td className="px-5 py-3">{r.employee?.name}</td>
-                      <td className="px-5 py-3">
-                        {r.employee?.branch?.name || "—"}
-                      </td>
-                      <td className="px-5 py-3">{r.status}</td>
-                      <td className="px-5 py-3">
-                        {r.online ? "Yes" : "No"}
-                      </td>
-                      <td className="px-5 py-3">{r.battery}</td>
-                      <td className="px-5 py-3">
-                        {r.todayDistanceLabel || "0 km"}
-                      </td>
-                      <td className="px-5 py-3">{r.location}</td>
                     </tr>
                   ))}
               </tbody>

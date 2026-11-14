@@ -152,15 +152,7 @@ const AlertsPage = () => {
     }
   };
 
-  const openRelated = (alert) => {
-    if (
-      alert.type === "gps_disabled" ||
-      alert.type === "offline" ||
-      alert.type === "low_battery"
-    ) {
-      navigate("/live-tracking");
-      return;
-    }
+  const openRelated = () => {
     navigate("/attendance");
   };
 
@@ -175,7 +167,7 @@ const AlertsPage = () => {
           </p>
           <h1 className="text-2xl sm:text-3xl font-bold mt-1">Alerts</h1>
           <p className="text-slate-500 mt-1 text-sm sm:text-base">
-            Review issues across attendance and field tracking.
+            Review attendance and system alerts.
           </p>
         </div>
 
