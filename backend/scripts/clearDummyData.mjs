@@ -17,6 +17,7 @@ import AttendanceLog from "../models/AttendanceLog.js";
 import FieldSession from "../models/FieldSession.js";
 import TaClaim from "../models/TaClaim.js";
 import Deduction from "../models/Deduction.js";
+import PaidOffDay from "../models/PaidOffDay.js";
 import PayrollPeriod from "../models/PayrollPeriod.js";
 import Payslip from "../models/Payslip.js";
 
@@ -43,6 +44,7 @@ const run = async () => {
       FieldSession.deleteMany({}),
       TaClaim.deleteMany({}),
       Deduction.deleteMany({}),
+      PaidOffDay.deleteMany({}),
       Payslip.deleteMany({}),
       PayrollPeriod.deleteMany({}),
     ]);
@@ -58,6 +60,7 @@ const run = async () => {
       "fieldSessions",
       "taClaims",
       "deductions",
+      "paidOffDays",
       "payslips",
       "payrollPeriods",
     ];
