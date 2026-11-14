@@ -32,6 +32,8 @@ const SHEET = [
     cnic: "41409-2136361-7",
     phone: "0331-3223900",
     smdsPartyCode: "",
+    basicSalary: 75000,
+    dailyAllowance: 0,
   },
   {
     employeeId: "THT-2",
@@ -45,6 +47,8 @@ const SHEET = [
     cnic: "41409-7523326-5",
     phone: "0321-9488931",
     smdsPartyCode: "8000001",
+    basicSalary: 30500,
+    dailyAllowance: 125,
   },
   {
     employeeId: "THT-3",
@@ -58,6 +62,8 @@ const SHEET = [
     cnic: "41409-3269099-1",
     phone: "0308-7614144",
     smdsPartyCode: "",
+    basicSalary: 27200,
+    dailyAllowance: 125,
   },
   {
     employeeId: "THT-4",
@@ -71,6 +77,8 @@ const SHEET = [
     cnic: "41409-1841252-2",
     phone: "0316-2992286",
     smdsPartyCode: "",
+    basicSalary: 25000,
+    dailyAllowance: 83.33,
   },
   {
     employeeId: "THT-5",
@@ -84,6 +92,8 @@ const SHEET = [
     cnic: "41409-8011744-3",
     phone: "",
     smdsPartyCode: "",
+    basicSalary: 11500,
+    dailyAllowance: 0,
   },
   {
     employeeId: "THT-6",
@@ -97,6 +107,8 @@ const SHEET = [
     cnic: "41409-9063343-5",
     phone: "0346-8969342",
     smdsPartyCode: "8000005",
+    basicSalary: 21400,
+    dailyAllowance: 83.33,
   },
   {
     employeeId: "THT-7",
@@ -110,6 +122,8 @@ const SHEET = [
     cnic: "41409-5274261-3",
     phone: "0328-3544090",
     smdsPartyCode: "",
+    basicSalary: 18000,
+    dailyAllowance: 0,
   },
 ];
 
@@ -145,6 +159,8 @@ const payloadFromSheet = (row, branchId) => ({
   cnic: row.cnic || "",
   phone: row.phone || "",
   smdsPartyCode: row.smdsPartyCode || "",
+  basicSalary: Number(row.basicSalary) || 0,
+  dailyAllowance: Number(row.dailyAllowance) || 0,
   status: "Active",
   ...(row.role === "Order Taker" || row.role === "Dispatcher"
     ? { password: FIELD_PASSWORD }
