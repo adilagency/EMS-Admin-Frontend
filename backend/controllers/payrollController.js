@@ -4,6 +4,7 @@ import Employee from "../models/Employee.js";
 import Attendance from "../models/Attendance.js";
 import TaClaim from "../models/TaClaim.js";
 import Deduction from "../models/Deduction.js";
+import PaidOffDay from "../models/PaidOffDay.js";
 import Branch from "../models/Branch.js";
 import Settings from "../models/Settings.js";
 import asyncHandler from "../utils/asyncHandler.js";
@@ -110,7 +111,7 @@ export const calculatePeriod = asyncHandler(async (req, res) => {
 
   const employeeIds = employees.map((e) => e._id);
 
-  const [attendanceRows, taRows, dedRows] = await Promise.all([
+  const [attendanceRows, taRows, dedRows, paidOffRows] = await Promise.all([
     Attendance.find({
       company: req.companyId,
       branch: period.branch,
@@ -136,13 +137,26 @@ export const calculatePeriod = asyncHandler(async (req, res) => {
     })
       .select("employee amount")
       .lean(),
+    PaidOffDay.find({
+      company: req.companyId,
+      date: { $gte: from, $lte: to },
+      $or: [{ branch: null }, { branch: period.branch }],
+    })
+      .select("date")
+      .lean(),
   ]);
 
-  const daysByEmp = new Map();
+  // Unique Present/Late dates per employee (dedupe if punch + paid-off same day)
+  const datesByEmp = new Map();
   for (const a of attendanceRows) {
     const key = String(a.employee);
-    daysByEmp.set(key, (daysByEmp.get(key) || 0) + 1);
+    if (!datesByEmp.has(key)) datesByEmp.set(key, new Set());
+    datesByEmp.get(key).add(a.date);
   }
+
+  const paidOffDates = [
+    ...new Set(paidOffRows.map((r) => r.date).filter(Boolean)),
+  ];
 
   const taByEmp = new Map();
   for (const t of taRows) {
@@ -161,7 +175,9 @@ export const calculatePeriod = asyncHandler(async (req, res) => {
   const slips = [];
   for (const emp of employees) {
     const key = String(emp._id);
-    const payableDays = daysByEmp.get(key) || 0;
+    const dates = datesByEmp.get(key) || new Set();
+    for (const d of paidOffDates) dates.add(d);
+    const payableDays = dates.size;
     const basicSalary = Number(emp.basicSalary) || 0;
     const dailyAllowanceRate = Number(emp.dailyAllowance) || 0;
     const dailyRate = workingDays > 0 ? basicSalary / workingDays : 0;
@@ -206,8 +222,15 @@ export const calculatePeriod = asyncHandler(async (req, res) => {
 
   res.json({
     success: true,
-    data: { period, payslips },
-    message: `Calculated ${payslips.length} payslips`,
+    data: {
+      period,
+      payslips,
+      paidOffDaysInPeriod: paidOffDates.length,
+    },
+    message:
+      paidOffDates.length > 0
+        ? `Calculated ${payslips.length} payslips (${paidOffDates.length} paid-off day${paidOffDates.length === 1 ? "" : "s"} included)`
+        : `Calculated ${payslips.length} payslips`,
   });
 });
 
