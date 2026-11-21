@@ -1,4 +1,4 @@
-import { Eye, Fingerprint, Smartphone, Users, PenLine } from "lucide-react";
+import { Eye, Fingerprint, Smartphone, Users, PenLine, Package } from "lucide-react";
 import Pagination from "../Pagination";
 
 const getStatusBadge = (status) => {
@@ -16,6 +16,18 @@ const getStatusBadge = (status) => {
     default:
       return "bg-slate-100 text-slate-700";
   }
+};
+
+const uniqueOrderAreas = (orders = []) => {
+  const seen = new Set();
+  const list = [];
+  for (const o of orders) {
+    const name = String(o.area || "").trim();
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    list.push(name);
+  }
+  return list;
 };
 
 const AttendanceTable = ({
@@ -36,7 +48,8 @@ const AttendanceTable = ({
       <div className="px-4 sm:px-6 py-5 border-b">
         <h2 className="text-lg sm:text-xl font-bold">Today&apos;s Attendance</h2>
         <p className="text-sm text-slate-500 mt-1">
-          Check-in only — first mark of the day counts as attendance.
+          Check-in only — first mark of the day counts as attendance. SMDS rows
+          also keep that day&apos;s orders and areas.
         </p>
       </div>
 
@@ -67,6 +80,10 @@ const AttendanceTable = ({
                 const employee = record.employee || {};
                 const branchName =
                   record.branch?.name || employee.branch?.name || "—";
+                const isSmds = record.method === "SMDS";
+                const areas = uniqueOrderAreas(record.smdsOrders);
+                const areaPreview = areas.slice(0, 3).join(", ");
+                const moreAreas = areas.length > 3 ? ` +${areas.length - 3}` : "";
 
                 return (
                   <tr
@@ -113,6 +130,12 @@ const AttendanceTable = ({
                           Manual
                         </div>
                       )}
+                      {record.method === "SMDS" && (
+                        <div className="flex items-center gap-2">
+                          <Package size={16} className="text-indigo-600" />
+                          SMDS
+                        </div>
+                      )}
                       {(record.method === "--" || !record.method) && "--"}
                     </td>
 
@@ -124,8 +147,46 @@ const AttendanceTable = ({
                       >
                         {record.status}
                       </span>
-                      {record.note ? (
-                        <p className="text-xs text-slate-400 mt-1 max-w-[140px] truncate" title={record.note}>
+                      {isSmds ? (
+                        <div className="mt-1.5 space-y-0.5 max-w-[240px]">
+                          {record.smdsFirstOrderArea ? (
+                            <p className="text-xs text-slate-600">
+                              First area:{" "}
+                              <span className="font-medium">
+                                {record.smdsFirstOrderArea}
+                              </span>
+                            </p>
+                          ) : null}
+                          {record.smdsRouteName ? (
+                            <p className="text-xs text-slate-500">
+                              Route:{" "}
+                              <span className="font-medium text-slate-700">
+                                {record.smdsRouteName}
+                              </span>
+                              {record.smdsOrderCount
+                                ? ` · ${record.smdsOrderCount} orders`
+                                : ""}
+                            </p>
+                          ) : record.smdsOrderCount ? (
+                            <p className="text-xs text-slate-500">
+                              {record.smdsOrderCount} orders
+                            </p>
+                          ) : null}
+                          {areaPreview ? (
+                            <p
+                              className="text-[11px] text-slate-400 truncate"
+                              title={areas.join(", ")}
+                            >
+                              Areas: {areaPreview}
+                              {moreAreas}
+                            </p>
+                          ) : null}
+                        </div>
+                      ) : record.note ? (
+                        <p
+                          className="text-xs text-slate-400 mt-1 max-w-[140px] truncate"
+                          title={record.note}
+                        >
                           {record.note}
                         </p>
                       ) : null}
