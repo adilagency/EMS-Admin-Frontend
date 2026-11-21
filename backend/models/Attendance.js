@@ -34,6 +34,11 @@ const attendanceSchema = new mongoose.Schema(
       enum: ["Present", "Absent", "Late", "Working", "On Leave"],
       required: true,
     },
+    /** SMDS first-order snapshot (attendance mark) */
+    smdsFirstOrderNo: { type: String, trim: true, default: "" },
+    smdsFirstOrderAt: { type: String, trim: true, default: "" },
+    smdsFirstOrderArea: { type: String, trim: true, default: "" },
+    smdsFirstOrderAreaCode: { type: String, trim: true, default: "" },
   },
   { timestamps: true }
 );
