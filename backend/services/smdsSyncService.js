@@ -5,15 +5,44 @@ import { formatClock, toDateKey } from "../utils/companyTime.js";
 import {
   smdsConfigured,
   smdsGetBookingOrder,
+  smdsGetBookingRoute,
 } from "./smdsClient.js";
 
 const DELAY_MS = Number(process.env.SMDS_SYNC_DELAY_MS || 900);
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+const slimOrders = (orders = []) =>
+  (Array.isArray(orders) ? orders : []).map((o) => ({
+    orderNo: String(o.orderNo || "").trim(),
+    orderDateTime: o.orderDateTime
+      ? new Date(o.orderDateTime).toISOString()
+      : "",
+    customerName: String(o.customerName || "").trim(),
+    area: String(o.area || "").trim(),
+    areaCode: String(o.areaCode || "").trim(),
+    gps: {
+      lat:
+        o.gps?.lat != null && Number.isFinite(Number(o.gps.lat))
+          ? Number(o.gps.lat)
+          : null,
+      lng:
+        o.gps?.lng != null && Number.isFinite(Number(o.gps.lng))
+          ? Number(o.gps.lng)
+          : null,
+    },
+  }));
+
+const slimRouteAreas = (areas = []) =>
+  (Array.isArray(areas) ? areas : []).map((a) => ({
+    areaCode: String(a.areaCode || "").trim(),
+    areaName: String(a.areaName || a.area || "").trim(),
+  }));
+
 /**
  * Sync SMDS first-order → EMS Present for employees with smdsPartyCode
  * on branches that have smdsBuGuid set.
+ * Also stores day route + all orders on the same attendance row.
  */
 export const syncSmdsAttendanceForDate = async ({
   companyId,
@@ -85,6 +114,29 @@ export const syncSmdsAttendanceForDate = async ({
 
         const punchedAt = new Date(payload.firstOrderAt);
         const checkIn = formatClock(punchedAt);
+        const orders = slimOrders(payload.orders);
+        const first = orders[0] || {};
+
+        let routeName = "";
+        let routeAreas = [];
+        try {
+          await sleep(Math.min(DELAY_MS, 400));
+          const routeRes = await smdsGetBookingRoute(
+            branch.smdsBuGuid,
+            String(emp.smdsPartyCode).trim(),
+            day
+          );
+          const route = routeRes.data || {};
+          routeName = String(route.routeName || "").trim();
+          routeAreas = slimRouteAreas(route.areas);
+        } catch (routeErr) {
+          // Present + orders still saved if route fails
+          details.push({
+            employeeId: emp.employeeId,
+            result: "route_failed",
+            message: routeErr.message,
+          });
+        }
 
         const existing = await Attendance.findOne({
           company: companyId,
@@ -134,6 +186,10 @@ export const syncSmdsAttendanceForDate = async ({
           partyCode: emp.smdsPartyCode,
           result: "present",
           checkIn,
+          firstArea: first.area || "",
+          routeName,
+          orderCount: orders.length,
+          routeAreaCount: routeAreas.length,
         });
       } catch (err) {
         errors.push({
