@@ -47,6 +47,21 @@ const attendanceSchema = new mongoose.Schema(
         areaName: { type: String, trim: true, default: "" },
       },
     ],
+    /** All SMDS orders that day (slim) */
+    smdsOrderCount: { type: Number, default: 0 },
+    smdsOrders: [
+      {
+        orderNo: { type: String, trim: true, default: "" },
+        orderDateTime: { type: String, trim: true, default: "" },
+        customerName: { type: String, trim: true, default: "" },
+        area: { type: String, trim: true, default: "" },
+        areaCode: { type: String, trim: true, default: "" },
+        gps: {
+          lat: { type: Number, default: null },
+          lng: { type: Number, default: null },
+        },
+      },
+    ],
   },
   { timestamps: true }
 );
