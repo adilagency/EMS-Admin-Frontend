@@ -39,6 +39,14 @@ const attendanceSchema = new mongoose.Schema(
     smdsFirstOrderAt: { type: String, trim: true, default: "" },
     smdsFirstOrderArea: { type: String, trim: true, default: "" },
     smdsFirstOrderAreaCode: { type: String, trim: true, default: "" },
+    /** SMDS day plan from /booking-route */
+    smdsRouteName: { type: String, trim: true, default: "" },
+    smdsRouteAreas: [
+      {
+        areaCode: { type: String, trim: true, default: "" },
+        areaName: { type: String, trim: true, default: "" },
+      },
+    ],
   },
   { timestamps: true }
 );
