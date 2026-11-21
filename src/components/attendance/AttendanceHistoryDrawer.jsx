@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { X, Fingerprint, Smartphone } from "lucide-react";
+import { X, Fingerprint, Smartphone, Package, MapPinned } from "lucide-react";
 import * as attendanceService from "../../services/attendanceService";
 
 const getStatusBadge = (status) => {
@@ -19,10 +19,30 @@ const getStatusBadge = (status) => {
   }
 };
 
+const uniqueOrderAreas = (orders = []) => {
+  const seen = new Set();
+  const list = [];
+  for (const o of orders) {
+    const name = String(o.area || "").trim();
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    list.push(name);
+  }
+  return list;
+};
+
+const formatOrderTime = (iso) => {
+  if (!iso) return "--";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return String(iso);
+  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+};
+
 const AttendanceHistoryDrawer = ({ open, onClose, employee }) => {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [expandedId, setExpandedId] = useState("");
 
   const employeeId =
     typeof employee?.employee === "object"
@@ -38,6 +58,7 @@ const AttendanceHistoryDrawer = ({ open, onClose, employee }) => {
     const load = async () => {
       setLoading(true);
       setError("");
+      setExpandedId("");
 
       try {
         const { data } = await attendanceService.getAttendanceHistory(employeeId);
@@ -102,48 +123,136 @@ const AttendanceHistoryDrawer = ({ open, onClose, employee }) => {
             </p>
           ) : (
             <div className="space-y-3">
-              {records.map((record) => (
-                <div
-                  key={record._id}
-                  className="border border-slate-200 rounded-2xl p-4"
-                >
-                  <div className="flex items-center justify-between">
-                    <p className="font-semibold text-slate-800">{record.date}</p>
-                    <span
-                      className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusBadge(
-                        record.status
-                      )}`}
-                    >
-                      {record.status}
-                    </span>
-                  </div>
+              {records.map((record) => {
+                const isSmds = record.method === "SMDS";
+                const openOrders = expandedId === record._id;
+                const areas = uniqueOrderAreas(record.smdsOrders);
 
-                  <div className="grid grid-cols-2 gap-3 mt-4 text-sm text-slate-600">
-                    <div>
-                      <p className="text-xs text-slate-400">Check In</p>
-                      <p className="font-medium">{record.checkIn || "--"}</p>
+                return (
+                  <div
+                    key={record._id}
+                    className="border border-slate-200 rounded-2xl p-4"
+                  >
+                    <div className="flex items-center justify-between">
+                      <p className="font-semibold text-slate-800">
+                        {record.date}
+                      </p>
+                      <span
+                        className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusBadge(
+                          record.status
+                        )}`}
+                      >
+                        {record.status}
+                      </span>
                     </div>
-                    <div>
-                      <p className="text-xs text-slate-400">Method</p>
-                      <div className="flex items-center gap-1.5 font-medium">
-                        {record.method === "Biometric" && (
-                          <Fingerprint size={14} className="text-blue-600" />
-                        )}
-                        {record.method === "GPS" && (
-                          <Smartphone size={14} className="text-green-600" />
-                        )}
-                        {record.method || "--"}
+
+                    <div className="grid grid-cols-2 gap-3 mt-4 text-sm text-slate-600">
+                      <div>
+                        <p className="text-xs text-slate-400">Check In</p>
+                        <p className="font-medium">{record.checkIn || "--"}</p>
                       </div>
+                      <div>
+                        <p className="text-xs text-slate-400">Method</p>
+                        <div className="flex items-center gap-1.5 font-medium">
+                          {record.method === "Biometric" && (
+                            <Fingerprint size={14} className="text-blue-600" />
+                          )}
+                          {record.method === "GPS" && (
+                            <Smartphone size={14} className="text-green-600" />
+                          )}
+                          {record.method === "SMDS" && (
+                            <Package size={14} className="text-indigo-600" />
+                          )}
+                          {record.method || "--"}
+                        </div>
+                      </div>
+
+                      {isSmds && record.smdsFirstOrderArea ? (
+                        <div className="col-span-2">
+                          <p className="text-xs text-slate-400">First order area</p>
+                          <p className="font-medium flex items-center gap-1">
+                            <MapPinned size={13} className="text-indigo-600" />
+                            {record.smdsFirstOrderArea}
+                          </p>
+                        </div>
+                      ) : null}
+
+                      {isSmds && record.smdsRouteName ? (
+                        <div>
+                          <p className="text-xs text-slate-400">Route</p>
+                          <p className="font-medium">{record.smdsRouteName}</p>
+                        </div>
+                      ) : null}
+
+                      {isSmds && record.smdsOrderCount ? (
+                        <div>
+                          <p className="text-xs text-slate-400">Orders</p>
+                          <p className="font-medium">{record.smdsOrderCount}</p>
+                        </div>
+                      ) : null}
+
+                      {isSmds && areas.length ? (
+                        <div className="col-span-2">
+                          <p className="text-xs text-slate-400">Areas used</p>
+                          <p className="font-medium text-sm">{areas.join(", ")}</p>
+                        </div>
+                      ) : null}
+
+                      {record.note && !isSmds ? (
+                        <div className="col-span-2">
+                          <p className="text-xs text-slate-400">Note</p>
+                          <p className="font-medium">{record.note}</p>
+                        </div>
+                      ) : null}
                     </div>
-                    {record.note ? (
-                      <div className="col-span-2">
-                        <p className="text-xs text-slate-400">Note</p>
-                        <p className="font-medium">{record.note}</p>
+
+                    {isSmds && (record.smdsOrders || []).length > 0 ? (
+                      <div className="mt-3">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setExpandedId(openOrders ? "" : record._id)
+                          }
+                          className="text-xs font-medium text-indigo-600 hover:text-indigo-700"
+                        >
+                          {openOrders ? "Hide orders" : "Show orders"}
+                        </button>
+                        {openOrders ? (
+                          <div className="mt-2 max-h-48 overflow-y-auto rounded-xl border border-slate-200">
+                            <table className="w-full text-xs">
+                              <thead className="bg-slate-50 text-slate-500 sticky top-0">
+                                <tr className="text-left">
+                                  <th className="px-2 py-1.5">Time</th>
+                                  <th className="px-2 py-1.5">Order</th>
+                                  <th className="px-2 py-1.5">Area</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {(record.smdsOrders || []).map((o, idx) => (
+                                  <tr
+                                    key={`${o.orderNo || idx}-${o.orderDateTime || idx}`}
+                                    className="border-t border-slate-100"
+                                  >
+                                    <td className="px-2 py-1 whitespace-nowrap">
+                                      {formatOrderTime(o.orderDateTime)}
+                                    </td>
+                                    <td className="px-2 py-1">
+                                      {o.orderNo || "—"}
+                                    </td>
+                                    <td className="px-2 py-1 font-medium">
+                                      {o.area || "—"}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : null}
                       </div>
                     ) : null}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
