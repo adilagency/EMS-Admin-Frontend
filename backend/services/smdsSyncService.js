@@ -171,6 +171,14 @@ export const syncSmdsAttendanceForDate = async ({
               method: "SMDS",
               status: "Present",
               note: existing?.note || "SMDS first order",
+              smdsFirstOrderNo: first.orderNo || "",
+              smdsFirstOrderAt: punchedAt.toISOString(),
+              smdsFirstOrderArea: first.area || "",
+              smdsFirstOrderAreaCode: first.areaCode || "",
+              smdsRouteName: routeName,
+              smdsRouteAreas: routeAreas,
+              smdsOrderCount: orders.length,
+              smdsOrders: orders,
             },
             $setOnInsert: {
               checkOut: "--",
@@ -189,7 +197,6 @@ export const syncSmdsAttendanceForDate = async ({
           firstArea: first.area || "",
           routeName,
           orderCount: orders.length,
-          routeAreaCount: routeAreas.length,
         });
       } catch (err) {
         errors.push({
